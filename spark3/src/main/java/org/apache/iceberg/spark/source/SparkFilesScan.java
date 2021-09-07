@@ -24,7 +24,6 @@ import java.util.Map;
 import java.util.Objects;
 import org.apache.iceberg.CombinedScanTask;
 import org.apache.iceberg.FileScanTask;
-import org.apache.iceberg.Schema;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.exceptions.ValidationException;
 import org.apache.iceberg.io.CloseableIterable;
@@ -68,11 +67,6 @@ class SparkFilesScan extends SparkBatchScan {
 
     long tableOpenFileCost = PropertyUtil.propertyAsLong(props, SPLIT_OPEN_FILE_COST, SPLIT_OPEN_FILE_COST_DEFAULT);
     this.splitOpenFileCost = Spark3Util.propertyAsLong(options, SparkReadOptions.FILE_OPEN_COST, tableOpenFileCost);
-  }
-
-  @Override
-  protected Schema snapshotSchema() {
-    return table().schema();
   }
 
   @Override
