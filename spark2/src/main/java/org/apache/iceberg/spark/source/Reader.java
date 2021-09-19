@@ -87,7 +87,6 @@ class Reader implements DataSourceReader, SupportsScanColumnarBatch, SupportsPus
   private final Table table;
   private final DataSourceOptions options;
   private final TableScan baseScan;
-  private final boolean caseSensitive;
   private StructType requestedSchema = null;
   private List<Expression> filterExpressions = null;
   private Filter[] pushedFilters = NO_FILTERS;
@@ -104,7 +103,6 @@ class Reader implements DataSourceReader, SupportsScanColumnarBatch, SupportsPus
   Reader(SparkSession spark, Table table, boolean caseSensitive, DataSourceOptions options) {
     this.sparkContext = JavaSparkContext.fromSparkContext(spark.sparkContext());
     this.table = table;
-    this.caseSensitive = caseSensitive;
     this.options = options;
 
     // configure a base scan
@@ -184,7 +182,8 @@ class Reader implements DataSourceReader, SupportsScanColumnarBatch, SupportsPus
     if (schema == null) {
       if (requestedSchema != null) {
         // the projection should include all columns that will be returned, including those only used in filters
-        this.schema = SparkSchemaUtil.prune(baseScan.schema(), requestedSchema, filterExpression(), caseSensitive);
+        this.schema = SparkSchemaUtil.prune(
+            baseScan.schema(), requestedSchema, filterExpression(), baseScan.isCaseSensitive());
       } else {
         this.schema = baseScan.schema();
       }
@@ -229,6 +228,7 @@ class Reader implements DataSourceReader, SupportsScanColumnarBatch, SupportsPus
     Broadcast<Table> tableBroadcast = sparkContext.broadcast(SerializableTable.copyOf(table));
 
     List<CombinedScanTask> scanTasks = tasks();
+    boolean caseSensitive = baseScan.isCaseSensitive();
     InputPartition<ColumnarBatch>[] readTasks = new InputPartition[scanTasks.size()];
 
     Tasks.range(readTasks.length)
@@ -253,6 +253,7 @@ class Reader implements DataSourceReader, SupportsScanColumnarBatch, SupportsPus
     Broadcast<Table> tableBroadcast = sparkContext.broadcast(SerializableTable.copyOf(table));
 
     List<CombinedScanTask> scanTasks = tasks();
+    boolean caseSensitive = baseScan.isCaseSensitive();
     InputPartition<InternalRow>[] readTasks = new InputPartition[scanTasks.size()];
 
     Tasks.range(readTasks.length)
@@ -432,8 +433,8 @@ class Reader implements DataSourceReader, SupportsScanColumnarBatch, SupportsPus
   @Override
   public String toString() {
     return String.format(
-        "IcebergScan(table=%s, type=%s, filters=%s, caseSensitive=%s, batchedReads=%s)",
-        table, lazySchema().asStruct(), filterExpressions, caseSensitive, enableBatchRead());
+        "IcebergScan(table=%s, type=%s, filters=%s, batchedReads=%s)",
+        table, lazySchema().asStruct(), filterExpressions, enableBatchRead());
   }
 
   private static class ReadTask<T> implements Serializable, InputPartition<T> {
