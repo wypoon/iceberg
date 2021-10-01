@@ -214,7 +214,7 @@ public abstract class AvroDataTest {
     });
 
     conf.forEach((confKey, confValue) -> {
-      if (SQLConf.staticConfKeys().contains(confKey)) {
+      if (SQLConf.isStaticConfigKey(confKey)) {
         throw new RuntimeException("Cannot modify the value of a static config: " + confKey);
       }
       sqlConf.setConfString(confKey, confValue);

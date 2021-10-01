@@ -35,7 +35,10 @@ case class MergeIntoExec(
     output: Seq[Attribute],
     override val child: SparkPlan) extends UnaryExecNode {
 
-  protected override def doExecute(): RDD[InternalRow] = {
+  override protected def withNewChildInternal(newChild: SparkPlan): MergeIntoExec =
+    copy(child = newChild)
+
+  override protected def doExecute(): RDD[InternalRow] = {
     child.execute().mapPartitions {
       processPartition(mergeIntoParams, _)
     }

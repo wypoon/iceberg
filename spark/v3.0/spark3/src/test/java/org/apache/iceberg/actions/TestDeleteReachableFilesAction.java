@@ -287,7 +287,7 @@ public class TestDeleteReachableFilesAction extends SparkTestBase {
     checkRemoveFilesResults(3L, 4L, 3L, 5, results);
 
     Assert.assertEquals(
-        "Expected total jobs to be equal to total number of shuffle partitions", totalJobsRun, SHUFFLE_PARTITIONS);
+        "Expected total jobs to be equal to total number of shuffle partitions", SHUFFLE_PARTITIONS, totalJobsRun);
   }
 
   @Test

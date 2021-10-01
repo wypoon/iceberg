@@ -91,6 +91,10 @@ case class DynamicFileFilterExec(
     val matchedFileLocations = rows.map(_.getString(0))
     filterable.filterFiles(matchedFileLocations.toSet.asJava)
   }
+
+  override protected def withNewChildrenInternal(
+      newScanExec: SparkPlan, newFileFilterExec: SparkPlan): DynamicFileFilterExec =
+    copy(scanExec = newScanExec, fileFilterExec = newFileFilterExec)
 }
 
 case class DynamicFileFilterWithCardinalityCheckExec(
@@ -112,4 +116,8 @@ case class DynamicFileFilterWithCardinalityCheckExec(
     val matchedFileLocations = filesAccumulator.value
     filterable.filterFiles(matchedFileLocations)
   }
+
+  override protected def withNewChildrenInternal(
+      newScanExec: SparkPlan, newFileFilterExec: SparkPlan): DynamicFileFilterWithCardinalityCheckExec =
+    copy(scanExec = newScanExec, fileFilterExec = newFileFilterExec)
 }

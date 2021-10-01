@@ -33,7 +33,7 @@ import org.apache.spark.sql.catalyst.expressions.IcebergYearTransform
 import org.apache.spark.sql.catalyst.expressions.NamedExpression
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.plans.logical.Sort
-import org.apache.spark.sql.connector.catalog.CatalogV2Implicits
+import org.apache.spark.sql.catalyst.util.quoteIfNeeded
 import org.apache.spark.sql.connector.expressions.ApplyTransform
 import org.apache.spark.sql.connector.expressions.BucketTransform
 import org.apache.spark.sql.connector.expressions.DaysTransform
@@ -141,7 +141,7 @@ object DistributionAndOrderingUtils {
         case Some(attr) =>
           attr
         case None =>
-          val ref = parts.map(CatalogV2Implicits.quoteIfNeeded).mkString(".")
+          val ref = parts.map(quoteIfNeeded).mkString(".")
           throw new AnalysisException(s"Cannot resolve '$ref' using ${query.output}")
       }
     }

@@ -40,4 +40,7 @@ case class AccumulateFiles(
     filesAccumulator.add(resultVal.toString)
     RETURN_VAL
   }
+
+  override protected def withNewChildInternal(newChild: Expression): AccumulateFiles =
+    copy(child = newChild)
 }

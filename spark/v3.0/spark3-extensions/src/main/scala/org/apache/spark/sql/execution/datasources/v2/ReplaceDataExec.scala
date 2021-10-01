@@ -35,4 +35,7 @@ case class ReplaceDataExec(
     refreshCache()
     writtenRows
   }
+
+  override protected def withNewChildInternal(newChild: SparkPlan): ReplaceDataExec =
+    copy(query = newChild)
 }

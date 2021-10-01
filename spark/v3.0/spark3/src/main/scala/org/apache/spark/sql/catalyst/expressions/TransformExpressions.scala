@@ -65,24 +65,36 @@ case class IcebergYearTransform(child: Expression)
   extends IcebergTimeTransform {
 
   @transient lazy val transform: Transform[Any, Integer] = Transforms.year[Any](icebergInputType)
+
+  override protected def withNewChildInternal(newChild: Expression): IcebergYearTransform =
+    copy(child = newChild)
 }
 
 case class IcebergMonthTransform(child: Expression)
   extends IcebergTimeTransform {
 
   @transient lazy val transform: Transform[Any, Integer] = Transforms.month[Any](icebergInputType)
+
+  override protected def withNewChildInternal(newChild: Expression): IcebergMonthTransform =
+    copy(child = newChild)
 }
 
 case class IcebergDayTransform(child: Expression)
   extends IcebergTimeTransform {
 
   @transient lazy val transform: Transform[Any, Integer] = Transforms.day[Any](icebergInputType)
+
+  override protected def withNewChildInternal(newChild: Expression): IcebergDayTransform =
+    copy(child = newChild)
 }
 
 case class IcebergHourTransform(child: Expression)
   extends IcebergTimeTransform {
 
   @transient lazy val transform: Transform[Any, Integer] = Transforms.hour[Any](icebergInputType)
+
+  override protected def withNewChildInternal(newChild: Expression): IcebergHourTransform =
+    copy(child = newChild)
 }
 
 case class IcebergBucketTransform(numBuckets: Int, child: Expression) extends IcebergTransformExpression {
@@ -106,6 +118,9 @@ case class IcebergBucketTransform(numBuckets: Int, child: Expression) extends Ic
   }
 
   override def dataType: DataType = IntegerType
+
+  override protected def withNewChildInternal(newChild: Expression): IcebergBucketTransform =
+    copy(child = newChild)
 }
 
 case class IcebergTruncateTransform(child: Expression, width: Int) extends IcebergTransformExpression {
@@ -134,4 +149,7 @@ case class IcebergTruncateTransform(child: Expression, width: Int) extends Icebe
   }
 
   override def dataType: DataType = child.dataType
+
+  override protected def withNewChildInternal(newChild: Expression): IcebergTruncateTransform =
+    copy(child = newChild)
 }

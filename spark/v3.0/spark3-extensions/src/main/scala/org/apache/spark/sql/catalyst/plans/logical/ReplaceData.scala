@@ -33,4 +33,6 @@ case class ReplaceData(
 
   def withNewTable(newTable: NamedRelation): ReplaceData = copy(table = newTable)
 
+  override protected def withNewChildInternal(newChild: LogicalPlan): ReplaceData =
+    copy(query = newChild)
 }

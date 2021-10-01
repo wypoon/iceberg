@@ -40,7 +40,7 @@ project(':iceberg-spark:iceberg-spark3') {
 
     compileOnly "com.google.errorprone:error_prone_annotations"
     compileOnly "org.apache.avro:avro"
-    compileOnly("org.apache.spark:spark-hive_2.12:${project.ext.Spark30Version}") {
+    compileOnly("org.apache.spark:spark-hive_2.12:${project.ext.Spark3Version}") {
       exclude group: 'org.apache.avro', module: 'avro'
       exclude group: 'org.apache.arrow'
     }
@@ -109,7 +109,7 @@ project(":iceberg-spark:iceberg-spark3-extensions") {
     compileOnly project(':iceberg-spark')
     compileOnly project(':iceberg-spark:iceberg-spark3')
     compileOnly project(':iceberg-hive-metastore')
-    compileOnly("org.apache.spark:spark-hive_2.12:${project.ext.Spark30Version}") {
+    compileOnly("org.apache.spark:spark-hive_2.12:${project.ext.Spark3Version}") {
       exclude group: 'org.apache.avro', module: 'avro'
       exclude group: 'org.apache.arrow'
     }
@@ -176,7 +176,7 @@ project(':iceberg-spark:iceberg-spark3-runtime') {
       exclude group: 'com.google.code.findbugs', module: 'jsr305'
     }
 
-    integrationImplementation "org.apache.spark:spark-hive_2.12:${project.ext.Spark30Version}"
+    integrationImplementation "org.apache.spark:spark-hive_2.12:${project.ext.Spark3Version}"
     integrationImplementation 'org.junit.vintage:junit-vintage-engine'
     integrationImplementation 'org.slf4j:slf4j-simple'
     integrationImplementation project(path: ':iceberg-api', configuration: 'testArtifacts')

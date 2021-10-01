@@ -41,6 +41,10 @@ case class DynamicFileFilter(
   override def simpleString(maxFields: Int): String = {
     s"DynamicFileFilter${truncatedString(output, "[", ", ", "]", maxFields)}"
   }
+
+  override protected def withNewChildrenInternal(
+      newScanPlan: LogicalPlan, newFileFilterPlan: LogicalPlan): DynamicFileFilter =
+    copy(scanPlan = newScanPlan, fileFilterPlan = newFileFilterPlan)
 }
 
 case class DynamicFileFilterWithCardinalityCheck(
@@ -59,4 +63,8 @@ case class DynamicFileFilterWithCardinalityCheck(
   override def simpleString(maxFields: Int): String = {
     s"DynamicFileFilterWithCardinalityCheck${truncatedString(output, "[", ", ", "]", maxFields)}"
   }
+
+  override protected def withNewChildrenInternal(
+      newScanPlan: LogicalPlan, newFileFilterPlan: LogicalPlan): DynamicFileFilterWithCardinalityCheck =
+    copy(scanPlan = newScanPlan, fileFilterPlan = newFileFilterPlan)
 }
