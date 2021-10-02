@@ -99,6 +99,8 @@ public class TestDeleteReachableFilesAction extends SparkTestBase {
     String tableLocation = tableDir.toURI().toString();
     this.table = TABLES.create(SCHEMA, SPEC, Maps.newHashMap(), tableLocation);
     spark.conf().set("spark.sql.shuffle.partitions", SHUFFLE_PARTITIONS);
+    // disable AQE, which is enabled by default in Spark 3.2
+    spark.conf().set("spark.sql.adaptive.enabled", false);
   }
 
   private void checkRemoveFilesResults(long expectedDatafiles, long expectedManifestsDeleted,
