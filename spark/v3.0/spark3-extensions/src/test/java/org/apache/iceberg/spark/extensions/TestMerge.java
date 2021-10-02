@@ -1097,7 +1097,7 @@ public abstract class TestMerge extends SparkRowLevelOperationsTestBase {
     createOrReplaceView("source", "{ \"c1\": -100, \"c2\": -200 }");
 
     AssertHelpers.assertThrows("Should complain about the invalid top-level column",
-        AnalysisException.class, "cannot resolve '`t.invalid_col`'",
+        AnalysisException.class, "cannot resolve t.invalid_col",
         () -> {
           sql("MERGE INTO %s t USING source s " +
               "ON t.id == s.c1 " +
@@ -1115,7 +1115,7 @@ public abstract class TestMerge extends SparkRowLevelOperationsTestBase {
         });
 
     AssertHelpers.assertThrows("Should complain about the invalid top-level column",
-        AnalysisException.class, "cannot resolve '`invalid_col`'",
+        AnalysisException.class, "cannot resolve invalid_col",
         () -> {
           sql("MERGE INTO %s t USING source s " +
               "ON t.id == s.c1 " +
@@ -1169,7 +1169,7 @@ public abstract class TestMerge extends SparkRowLevelOperationsTestBase {
     createOrReplaceView("source", "{ \"c1\": -100, \"c2\": -200 }");
 
     AssertHelpers.assertThrows("Should complain about updating an array column",
-        AnalysisException.class, "Updating nested fields is only supported for structs",
+        AnalysisException.class, "data type mismatch: cannot cast bigint to array<int>",
         () -> {
           sql("MERGE INTO %s t USING source s " +
               "ON t.id == s.c1 " +
@@ -1411,7 +1411,7 @@ public abstract class TestMerge extends SparkRowLevelOperationsTestBase {
     createOrReplaceView("source", "{ \"id\": 1, \"value\": 11 }");
 
     AssertHelpers.assertThrows("Should complain about the target column",
-        AnalysisException.class, "cannot resolve '`c2`'",
+        AnalysisException.class, "cannot resolve 'c2'",
         () -> {
           sql("MERGE INTO %s t USING source s " +
               "ON t.id == s.id " +

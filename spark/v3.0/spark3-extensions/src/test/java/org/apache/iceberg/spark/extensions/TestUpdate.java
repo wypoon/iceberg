@@ -822,7 +822,7 @@ public abstract class TestUpdate extends SparkRowLevelOperationsTestBase {
     createAndInitTable("id INT, a ARRAY<STRUCT<c1:INT,c2:INT>>, m MAP<STRING,STRING>");
 
     AssertHelpers.assertThrows("Should complain about updating an array column",
-        AnalysisException.class, "Updating nested fields is only supported for structs",
+        AnalysisException.class, "data type mismatch: cannot cast int to array<int>",
         () -> sql("UPDATE %s SET a.c1 = 1", tableName));
 
     AssertHelpers.assertThrows("Should complain about updating a map column",
