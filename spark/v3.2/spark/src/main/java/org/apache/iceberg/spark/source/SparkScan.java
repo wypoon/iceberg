@@ -216,6 +216,7 @@ abstract class SparkScan implements Scan, SupportsReportStatistics {
     RowReader(ReadTask task) {
       super(task.task, task.table(), task.expectedSchema(), task.isCaseSensitive());
       numFilesToRead = numFilesToScan(task.task);
+      LOG.debug("reading {} files for table {}", numFilesToRead, task.table().name());
     }
 
     @Override
@@ -230,6 +231,7 @@ abstract class SparkScan implements Scan, SupportsReportStatistics {
     BatchReader(ReadTask task, int batchSize) {
       super(task.task, task.table(), task.expectedSchema(), task.isCaseSensitive(), batchSize);
       numFilesToRead = numFilesToScan(task.task);
+      LOG.debug("reading {} files for table {}", numFilesToRead, task.table().name());
     }
 
     @Override
