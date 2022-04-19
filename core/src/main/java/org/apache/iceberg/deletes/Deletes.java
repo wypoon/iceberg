@@ -75,8 +75,21 @@ public class Deletes {
     });
   }
 
-  public static <T> CloseableIterable<T> filterDeleted(CloseableIterable<T> rows, Predicate<T> isDeleted) {
-    return CloseableIterable.filter(rows, isDeleted.negate());
+  // This returns the remaining rows (the ones that are not deleted) while counting the deleted ones
+  public static <T> CloseableIterable<T> filterDeleted(CloseableIterable<T> rows, Predicate<T> isDeleted,
+                                                       DeleteCounter counter) {
+    Filter<T> remainingRowsFilter = new Filter<T>() {
+      @Override
+      protected boolean shouldKeep(T item) {
+        boolean deleted = isDeleted.test(item);
+        if (deleted) {
+          counter.increment();
+        }
+        return !deleted;
+      }
+    };
+
+    return remainingRowsFilter.filter(rows);
   }
 
   public static StructLikeSet toEqualitySet(CloseableIterable<StructLike> eqDeletes, Types.StructType eqType) {
@@ -90,27 +103,47 @@ public class Deletes {
   }
 
   public static <T extends StructLike> PositionDeleteIndex toPositionIndex(CharSequence dataLocation,
-                                                                           List<CloseableIterable<T>> deleteFiles) {
+                                                                           List<CloseableIterable<T>> deleteFiles,
+                                                                           DeleteCounter counter) {
     DataFileFilter<T> locationFilter = new DataFileFilter<>(dataLocation);
     List<CloseableIterable<Long>> positions = Lists.transform(deleteFiles, deletes ->
         CloseableIterable.transform(locationFilter.filter(deletes), row -> (Long) POSITION_ACCESSOR.get(row)));
-    return toPositionIndex(CloseableIterable.concat(positions));
+    return toPositionIndex(CloseableIterable.concat(positions), counter);
   }
 
-  public static PositionDeleteIndex toPositionIndex(CloseableIterable<Long> posDeletes) {
+  public static PositionDeleteIndex toPositionIndex(CloseableIterable<Long> posDeletes, DeleteCounter counter) {
     try (CloseableIterable<Long> deletes = posDeletes) {
       PositionDeleteIndex positionDeleteIndex = new BitmapPositionDeleteIndex();
       deletes.forEach(positionDeleteIndex::delete);
+      if (counter != null) {
+        counter.increment(((BitmapPositionDeleteIndex) positionDeleteIndex).numberOfPositionsDeleted());
+      }
       return positionDeleteIndex;
     } catch (IOException e) {
       throw new UncheckedIOException("Failed to close position delete source", e);
     }
   }
 
+  public static <T extends StructLike> PositionDeleteIndex toPositionIndex(CharSequence dataLocation,
+                                                                           List<CloseableIterable<T>> deleteFiles) {
+    return toPositionIndex(dataLocation, deleteFiles, null);
+  }
+
+  public static PositionDeleteIndex toPositionIndex(CloseableIterable<Long> posDeletes) {
+    return toPositionIndex(posDeletes, null);
+  }
+
   public static <T> CloseableIterable<T> streamingFilter(CloseableIterable<T> rows,
                                                          Function<T, Long> rowToPosition,
                                                          CloseableIterable<Long> posDeletes) {
-    return new PositionStreamDeleteFilter<>(rows, rowToPosition, posDeletes);
+    return streamingFilter(rows, rowToPosition, posDeletes, null);
+  }
+
+  public static <T> CloseableIterable<T> streamingFilter(CloseableIterable<T> rows,
+                                                         Function<T, Long> rowToPosition,
+                                                         CloseableIterable<Long> posDeletes,
+                                                         DeleteCounter counter) {
+    return new PositionStreamDeleteFilter<>(rows, rowToPosition, posDeletes, counter);
   }
 
   public static <T> CloseableIterable<T> streamingMarker(CloseableIterable<T> rows,
@@ -202,9 +235,12 @@ public class Deletes {
   }
 
   private static class PositionStreamDeleteFilter<T> extends PositionStreamDeleteIterable<T> {
-    private PositionStreamDeleteFilter(CloseableIterable<T> rows, Function<T, Long> rowToPosition,
-                                       CloseableIterable<Long> deletePositions) {
+    private final DeleteCounter counter;
+
+    PositionStreamDeleteFilter(CloseableIterable<T> rows, Function<T, Long> rowToPosition,
+                               CloseableIterable<Long> deletePositions, DeleteCounter counter) {
       super(rows, rowToPosition, deletePositions);
+      this.counter = counter;
     }
 
     @Override
@@ -212,7 +248,11 @@ public class Deletes {
       return new FilterIterator<T>(items) {
         @Override
         protected boolean shouldKeep(T item) {
-          return !isDeleted(item);
+          boolean deleted = isDeleted(item);
+          if (deleted) {
+            counter.increment();
+          }
+          return !deleted;
         }
       };
     }

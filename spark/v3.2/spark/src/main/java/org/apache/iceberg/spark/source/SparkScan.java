@@ -39,7 +39,9 @@ import org.apache.iceberg.spark.Spark3Util;
 import org.apache.iceberg.spark.SparkReadConf;
 import org.apache.iceberg.spark.SparkSchemaUtil;
 import org.apache.iceberg.spark.SparkUtil;
+import org.apache.iceberg.spark.source.metrics.NumDeletes;
 import org.apache.iceberg.spark.source.metrics.NumSplits;
+import org.apache.iceberg.spark.source.metrics.TaskNumDeletes;
 import org.apache.iceberg.spark.source.metrics.TaskNumSplits;
 import org.apache.iceberg.util.PropertyUtil;
 import org.apache.spark.broadcast.Broadcast;
@@ -166,7 +168,7 @@ abstract class SparkScan extends SparkBatch implements Scan, SupportsReportStati
 
   @Override
   public CustomMetric[] supportedCustomMetrics() {
-    return new CustomMetric[] { new NumSplits() };
+    return new CustomMetric[] { new NumSplits(), new NumDeletes() };
   }
 
   static class ReaderFactory implements PartitionReaderFactory {
@@ -211,7 +213,7 @@ abstract class SparkScan extends SparkBatch implements Scan, SupportsReportStati
 
     @Override
     public CustomTaskMetric[] currentMetricsValues() {
-      return new CustomTaskMetric[] { new TaskNumSplits(numSplits) };
+      return new CustomTaskMetric[] { new TaskNumSplits(numSplits), new TaskNumDeletes(counter().get()) };
     }
   }
 
@@ -226,7 +228,7 @@ abstract class SparkScan extends SparkBatch implements Scan, SupportsReportStati
 
     @Override
     public CustomTaskMetric[] currentMetricsValues() {
-      return new CustomTaskMetric[] { new TaskNumSplits(numSplits) };
+      return new CustomTaskMetric[] { new TaskNumSplits(numSplits), new TaskNumDeletes(counter().get()) };
     }
   }
 

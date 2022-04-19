@@ -17,38 +17,31 @@
  * under the License.
  */
 
-package org.apache.iceberg.deletes;
+package org.apache.iceberg.spark.source.metrics;
 
-import org.roaringbitmap.longlong.Roaring64Bitmap;
+import java.text.NumberFormat;
+import org.apache.spark.sql.connector.metric.CustomMetric;
 
-class BitmapPositionDeleteIndex implements PositionDeleteIndex {
-  private final Roaring64Bitmap roaring64Bitmap;
+public class NumDeletes implements CustomMetric {
 
-  BitmapPositionDeleteIndex() {
-    roaring64Bitmap = new Roaring64Bitmap();
+  public static final String DISPLAY_STRING = "number of row deletes applied";
+
+  @Override
+  public String name() {
+    return "numDeletes";
   }
 
   @Override
-  public void delete(long position) {
-    roaring64Bitmap.add(position);
+  public String description() {
+    return DISPLAY_STRING;
   }
 
   @Override
-  public void delete(long posStart, long posEnd) {
-    roaring64Bitmap.add(posStart, posEnd);
-  }
-
-  @Override
-  public boolean isDeleted(long position) {
-    return roaring64Bitmap.contains(position);
-  }
-
-  @Override
-  public boolean isEmpty() {
-    return roaring64Bitmap.isEmpty();
-  }
-
-  public long numberOfPositionsDeleted() {
-    return roaring64Bitmap.getLongCardinality();
+  public String aggregateTaskMetrics(long[] taskMetrics) {
+    long sum = initialValue;
+    for (int i = 0; i < taskMetrics.length; i++) {
+      sum += taskMetrics[i];
+    }
+    return NumberFormat.getIntegerInstance().format(sum);
   }
 }

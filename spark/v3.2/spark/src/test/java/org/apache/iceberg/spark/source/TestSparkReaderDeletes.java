@@ -21,6 +21,7 @@ package org.apache.iceberg.spark.source;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.iceberg.BaseTable;
@@ -52,15 +53,23 @@ import org.apache.iceberg.relocated.com.google.common.collect.Lists;
 import org.apache.iceberg.relocated.com.google.common.collect.Sets;
 import org.apache.iceberg.spark.SparkSchemaUtil;
 import org.apache.iceberg.spark.SparkStructLike;
+import org.apache.iceberg.spark.source.metrics.NumDeletes;
 import org.apache.iceberg.types.Types;
 import org.apache.iceberg.util.ArrayUtil;
 import org.apache.iceberg.util.CharSequenceSet;
 import org.apache.iceberg.util.Pair;
 import org.apache.iceberg.util.StructLikeSet;
 import org.apache.iceberg.util.TableScanUtil;
+import org.apache.spark.scheduler.SparkListener;
+import org.apache.spark.scheduler.SparkListenerEvent;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.execution.ui.SQLAppStatusStore;
+import org.apache.spark.sql.execution.ui.SQLExecutionUIData;
+import org.apache.spark.sql.execution.ui.SQLPlanMetric;
+import org.apache.spark.sql.execution.ui.SparkListenerSQLExecutionEnd;
+import org.apache.spark.sql.execution.ui.SparkListenerSQLExecutionStart;
 import org.apache.spark.sql.internal.SQLConf;
 import org.jetbrains.annotations.NotNull;
 import org.junit.AfterClass;
@@ -70,6 +79,7 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
+import scala.collection.JavaConverters;
 
 import static org.apache.hadoop.hive.conf.HiveConf.ConfVars.METASTOREURIS;
 import static org.apache.iceberg.types.Types.NestedField.required;
@@ -77,18 +87,58 @@ import static org.apache.iceberg.types.Types.NestedField.required;
 @RunWith(Parameterized.class)
 public class TestSparkReaderDeletes extends DeleteReadTests {
 
+  // SparkListener for tracking executionIds
+  private static class TestSparkListener extends SparkListener {
+    private final List<Long> executionIds = Lists.newArrayList();
+    private final List<Long> completedExecutionIds = Lists.newArrayList();
+
+    public List<Long> executed() {
+      return executionIds;
+    }
+
+    public List<Long> completed() {
+      return completedExecutionIds;
+    }
+
+    @Override
+    public void onOtherEvent(SparkListenerEvent event) {
+      if (event instanceof SparkListenerSQLExecutionStart) {
+        onExecutionStart((SparkListenerSQLExecutionStart) event);
+      } else if (event instanceof SparkListenerSQLExecutionEnd) {
+        onExecutionEnd((SparkListenerSQLExecutionEnd) event);
+      }
+    }
+
+    private void onExecutionStart(SparkListenerSQLExecutionStart event) {
+      executionIds.add(event.executionId());
+    }
+
+    private void onExecutionEnd(SparkListenerSQLExecutionEnd event) {
+      completedExecutionIds.add(event.executionId());
+    }
+  }
+
+  private static TestSparkListener listener = null;
   private static TestHiveMetastore metastore = null;
   protected static SparkSession spark = null;
   protected static HiveCatalog catalog = null;
+  private final String format;
   private final boolean vectorized;
+  private long deleteCount;
 
-  public TestSparkReaderDeletes(boolean vectorized) {
+  public TestSparkReaderDeletes(String format, boolean vectorized) {
+    this.format = format;
     this.vectorized = vectorized;
   }
 
-  @Parameterized.Parameters(name = "vectorized = {0}")
-  public static Object[] parameters() {
-    return new Object[] {false, true};
+  @Parameterized.Parameters(name = "format = {0}, vectorized = {1}")
+  public static Object[][] parameters() {
+    return new Object[][] {
+        new Object[] {"parquet", false},
+        new Object[] {"parquet", true},
+        new Object[] {"orc", false},
+        new Object[] {"avro", false}
+    };
   }
 
   @BeforeClass
@@ -99,10 +149,14 @@ public class TestSparkReaderDeletes extends DeleteReadTests {
 
     spark = SparkSession.builder()
         .master("local[2]")
+        .config("spark.appStateStore.asyncTracking.enable", false)
         .config(SQLConf.PARTITION_OVERWRITE_MODE().key(), "dynamic")
         .config("spark.hadoop." + METASTOREURIS.varname, hiveConf.get(METASTOREURIS.varname))
         .enableHiveSupport()
         .getOrCreate();
+
+    listener = new TestSparkListener();
+    spark.sparkContext().addSparkListener(listener);
 
     catalog = (HiveCatalog)
         CatalogUtil.loadCatalog(HiveCatalog.class.getName(), "hive", ImmutableMap.of(), hiveConf);
@@ -129,7 +183,10 @@ public class TestSparkReaderDeletes extends DeleteReadTests {
     TableOperations ops = ((BaseTable) table).operations();
     TableMetadata meta = ops.current();
     ops.commit(meta, meta.upgradeToFormatVersion(2));
-    if (vectorized) {
+    table.updateProperties()
+        .set(TableProperties.DEFAULT_FILE_FORMAT, format)
+        .commit();
+    if (format.equals("parquet") && vectorized) {
       table.updateProperties()
           .set(TableProperties.PARQUET_VECTORIZATION_ENABLED, "true")
           .set(TableProperties.PARQUET_BATCH_SIZE, "4") // split 7 records to two batches to cover more code paths
@@ -145,6 +202,19 @@ public class TestSparkReaderDeletes extends DeleteReadTests {
   @Override
   protected void dropTable(String name) {
     catalog.dropTable(TableIdentifier.of("default", name));
+  }
+
+  protected boolean countDeletes() {
+    return true;
+  }
+
+  private void setDeleteCount(long count) {
+    deleteCount = count;
+  }
+
+  @Override
+  protected long deleteCount() {
+    return deleteCount;
   }
 
   @Override
@@ -164,7 +234,51 @@ public class TestSparkReaderDeletes extends DeleteReadTests {
       set.add(rowWrapper.wrap(row));
     });
 
+    extractDeleteCount();
     return set;
+  }
+
+  private void extractDeleteCount() {
+    // Get the executionId of the query we just executed
+    List<Long> executed = listener.executed();
+    long lastExecuted = executed.get(executed.size() - 1);
+    // Ensure that the execution end was registered
+    long lastCompleted = -1;
+    for (int i = 0; i < 3; i++) {
+      List<Long> completed = listener.completed();
+      lastCompleted = completed.get(completed.size() - 1);
+      if (lastCompleted == lastExecuted) {
+        break;
+      } else {
+        try {
+          Thread.sleep(100L);
+        } catch (InterruptedException e) {
+          // do nothing
+        }
+      }
+    }
+    Assert.assertTrue("Execution end event was not received", lastCompleted == lastExecuted);
+
+    // With the executionId, we can get the executionMetrics from the SQLAppStatusStore,
+    // but that is a map of accumulatorId to string representation of the metric value.
+    // We need to know the accumulatorId for the number of deletes metric, so we can then
+    // look up its value in this map.
+    SQLAppStatusStore statusStore = spark.sharedState().statusStore();
+    SQLExecutionUIData executionUIData = statusStore.execution(lastExecuted).get();
+    List<SQLPlanMetric> planMetrics = JavaConverters.seqAsJavaList(executionUIData.metrics());
+    Long metricId = null;
+    for (SQLPlanMetric metric : planMetrics) {
+      if (metric.name().equals(NumDeletes.DISPLAY_STRING)) {
+        metricId = metric.accumulatorId();
+        break;
+      }
+    }
+    Assert.assertNotNull("Unable to find custom metric for number of deletes", metricId);
+
+    // Now get the executionMetrics map and look up the number of deletes, parsing the string into a long
+    Map<Object, String> executionMetrics = JavaConverters.mapAsJavaMap(statusStore.executionMetrics(lastExecuted));
+    long delCount = Long.valueOf(executionMetrics.get(metricId));
+    setDeleteCount(delCount);
   }
 
   @Test
@@ -273,6 +387,8 @@ public class TestSparkReaderDeletes extends DeleteReadTests {
     StructLikeSet actual = rowSet(tableName, table, "*");
 
     Assert.assertEquals("Table should contain expected rows", expected, actual);
+    long expectedDeletes = 4L;
+    checkDeleteCount(expectedDeletes);
   }
 
   @Test

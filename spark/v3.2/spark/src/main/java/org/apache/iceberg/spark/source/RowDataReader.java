@@ -31,6 +31,7 @@ import org.apache.iceberg.Table;
 import org.apache.iceberg.TableProperties;
 import org.apache.iceberg.avro.Avro;
 import org.apache.iceberg.data.DeleteFilter;
+import org.apache.iceberg.deletes.DeleteCounter;
 import org.apache.iceberg.io.CloseableIterable;
 import org.apache.iceberg.io.CloseableIterator;
 import org.apache.iceberg.io.InputFile;
@@ -46,13 +47,16 @@ import org.apache.iceberg.spark.data.SparkParquetReaders;
 import org.apache.iceberg.types.TypeUtil;
 import org.apache.spark.rdd.InputFileBlockHolder;
 import org.apache.spark.sql.catalyst.InternalRow;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 class RowDataReader extends BaseDataReader<InternalRow> {
-
+  private static final Logger LOG = LoggerFactory.getLogger(RowDataReader.class);
   private final Schema tableSchema;
   private final Schema expectedSchema;
   private final String nameMapping;
   private final boolean caseSensitive;
+  private final DeleteCounter counter;
 
   RowDataReader(CombinedScanTask task, Table table, Schema expectedSchema, boolean caseSensitive) {
     super(table, task);
@@ -60,16 +64,22 @@ class RowDataReader extends BaseDataReader<InternalRow> {
     this.expectedSchema = expectedSchema;
     this.nameMapping = table.properties().get(TableProperties.DEFAULT_NAME_MAPPING);
     this.caseSensitive = caseSensitive;
+    this.counter = new DeleteCounter();
+  }
+
+  protected DeleteCounter counter() {
+    return counter;
   }
 
   @Override
   CloseableIterator<InternalRow> open(FileScanTask task) {
-    SparkDeleteFilter deletes = new SparkDeleteFilter(task, tableSchema, expectedSchema);
+    SparkDeleteFilter deletes = new SparkDeleteFilter(task, tableSchema, expectedSchema, counter);
 
     // schema or rows returned by readers
     Schema requiredSchema = deletes.requiredSchema();
     Map<Integer, ?> idToConstant = constantsMap(task, expectedSchema);
     DataFile file = task.file();
+    LOG.debug("Opening data file {}", file.path());
 
     // update the current file for Spark's filename() function
     InputFileBlockHolder.set(file.path().toString(), task.start(), task.length());
@@ -181,8 +191,8 @@ class RowDataReader extends BaseDataReader<InternalRow> {
   protected class SparkDeleteFilter extends DeleteFilter<InternalRow> {
     private final InternalRowWrapper asStructLike;
 
-    SparkDeleteFilter(FileScanTask task, Schema tableSchema, Schema requestedSchema) {
-      super(task.file().path().toString(), task.deletes(), tableSchema, requestedSchema);
+    SparkDeleteFilter(FileScanTask task, Schema tableSchema, Schema requestedSchema, DeleteCounter counter) {
+      super(task.file().path().toString(), task.deletes(), tableSchema, requestedSchema, counter);
       this.asStructLike = new InternalRowWrapper(SparkSchemaUtil.convert(requiredSchema()));
     }
 

@@ -17,38 +17,24 @@
  * under the License.
  */
 
-package org.apache.iceberg.deletes;
+package org.apache.iceberg.spark.source.metrics;
 
-import org.roaringbitmap.longlong.Roaring64Bitmap;
+import org.apache.spark.sql.connector.metric.CustomTaskMetric;
 
-class BitmapPositionDeleteIndex implements PositionDeleteIndex {
-  private final Roaring64Bitmap roaring64Bitmap;
+public class TaskNumDeletes implements CustomTaskMetric {
+  private final long value;
 
-  BitmapPositionDeleteIndex() {
-    roaring64Bitmap = new Roaring64Bitmap();
+  public TaskNumDeletes(long value) {
+    this.value = value;
   }
 
   @Override
-  public void delete(long position) {
-    roaring64Bitmap.add(position);
+  public String name() {
+    return "numDeletes";
   }
 
   @Override
-  public void delete(long posStart, long posEnd) {
-    roaring64Bitmap.add(posStart, posEnd);
-  }
-
-  @Override
-  public boolean isDeleted(long position) {
-    return roaring64Bitmap.contains(position);
-  }
-
-  @Override
-  public boolean isEmpty() {
-    return roaring64Bitmap.isEmpty();
-  }
-
-  public long numberOfPositionsDeleted() {
-    return roaring64Bitmap.getLongCardinality();
+  public long value() {
+    return value;
   }
 }

@@ -32,6 +32,7 @@ import org.apache.iceberg.StructLike;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.TableProperties;
 import org.apache.iceberg.data.DeleteFilter;
+import org.apache.iceberg.deletes.DeleteCounter;
 import org.apache.iceberg.io.CloseableIterable;
 import org.apache.iceberg.io.CloseableIterator;
 import org.apache.iceberg.io.InputFile;
@@ -47,12 +48,16 @@ import org.apache.iceberg.types.TypeUtil;
 import org.apache.spark.rdd.InputFileBlockHolder;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.vectorized.ColumnarBatch;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 class BatchDataReader extends BaseDataReader<ColumnarBatch> {
+  private static final Logger LOG = LoggerFactory.getLogger(BatchDataReader.class);
   private final Schema expectedSchema;
   private final String nameMapping;
   private final boolean caseSensitive;
   private final int batchSize;
+  private final DeleteCounter counter;
 
   BatchDataReader(CombinedScanTask task, Table table, Schema expectedSchema, boolean caseSensitive, int size) {
     super(table, task);
@@ -60,11 +65,17 @@ class BatchDataReader extends BaseDataReader<ColumnarBatch> {
     this.nameMapping = table.properties().get(TableProperties.DEFAULT_NAME_MAPPING);
     this.caseSensitive = caseSensitive;
     this.batchSize = size;
+    this.counter = new DeleteCounter();
+  }
+
+  protected DeleteCounter counter() {
+    return counter;
   }
 
   @Override
   CloseableIterator<ColumnarBatch> open(FileScanTask task) {
     DataFile file = task.file();
+    LOG.debug("Opening data file {}", file.path());
 
     // update the current file for Spark's filename() function
     InputFileBlockHolder.set(file.path().toString(), task.start(), task.length());
@@ -126,7 +137,12 @@ class BatchDataReader extends BaseDataReader<ColumnarBatch> {
   }
 
   private SparkDeleteFilter deleteFilter(FileScanTask task) {
-    return task.deletes().isEmpty() ? null : new SparkDeleteFilter(task, table().schema(), expectedSchema);
+    if (task.deletes().isEmpty()) {
+      return null;
+    } else {
+      LOG.debug("Creating a SparkDeleteFilter");
+      return new SparkDeleteFilter(task, table().schema(), expectedSchema, counter);
+    }
   }
 
   private Schema requiredSchema(DeleteFilter deleteFilter) {
@@ -140,8 +156,8 @@ class BatchDataReader extends BaseDataReader<ColumnarBatch> {
   private class SparkDeleteFilter extends DeleteFilter<InternalRow> {
     private final InternalRowWrapper asStructLike;
 
-    SparkDeleteFilter(FileScanTask task, Schema tableSchema, Schema requestedSchema) {
-      super(task.file().path().toString(), task.deletes(), tableSchema, requestedSchema);
+    SparkDeleteFilter(FileScanTask task, Schema tableSchema, Schema requestedSchema, DeleteCounter counter) {
+      super(task.file().path().toString(), task.deletes(), tableSchema, requestedSchema, counter);
       this.asStructLike = new InternalRowWrapper(SparkSchemaUtil.convert(requiredSchema()));
     }
 

@@ -19,36 +19,19 @@
 
 package org.apache.iceberg.deletes;
 
-import org.roaringbitmap.longlong.Roaring64Bitmap;
+public class DeleteCounter {
 
-class BitmapPositionDeleteIndex implements PositionDeleteIndex {
-  private final Roaring64Bitmap roaring64Bitmap;
+  private long count = 0L;
 
-  BitmapPositionDeleteIndex() {
-    roaring64Bitmap = new Roaring64Bitmap();
+  public void increment() {
+    count++;
   }
 
-  @Override
-  public void delete(long position) {
-    roaring64Bitmap.add(position);
+  public void increment(long delta) {
+    count += delta;
   }
 
-  @Override
-  public void delete(long posStart, long posEnd) {
-    roaring64Bitmap.add(posStart, posEnd);
-  }
-
-  @Override
-  public boolean isDeleted(long position) {
-    return roaring64Bitmap.contains(position);
-  }
-
-  @Override
-  public boolean isEmpty() {
-    return roaring64Bitmap.isEmpty();
-  }
-
-  public long numberOfPositionsDeleted() {
-    return roaring64Bitmap.getLongCardinality();
+  public long get() {
+    return count;
   }
 }
