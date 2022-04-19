@@ -169,6 +169,13 @@ public abstract class DeleteReadTests {
     return 0L;
   }
 
+  protected void checkDeleteCount(long expectedDeletes) {
+    if (countDeletes()) {
+      long actualDeletes = deleteCount();
+      Assert.assertEquals("Table should contain expected number of deletes", expectedDeletes, actualDeletes);
+    }
+  }
+
   @Test
   public void testEqualityDeletes() throws IOException {
     Schema deleteRowSchema = table.schema().select("data");
@@ -190,11 +197,8 @@ public abstract class DeleteReadTests {
     StructLikeSet actual = rowSet(tableName, table, "*");
 
     Assert.assertEquals("Table should contain expected rows", expected, actual);
-    if (countDeletes()) {
-      long expectedDeletes = 3L;
-      long actualDeletes = deleteCount();
-      Assert.assertEquals("Table should contain expected number of deletes", expectedDeletes, actualDeletes);
-    }
+    long expectedDeletes = 3L;
+    checkDeleteCount(expectedDeletes);
   }
 
   @Test
@@ -230,11 +234,8 @@ public abstract class DeleteReadTests {
     StructLikeSet actual = rowSet(dateTableName, dateTable, "*");
 
     Assert.assertEquals("Table should contain expected rows", expected, actual);
-    if (countDeletes()) {
-      long expectedDeletes = 3L;
-      long actualDeletes = deleteCount();
-      Assert.assertEquals("Table should contain expected number of deletes", expectedDeletes, actualDeletes);
-    }
+    long expectedDeletes = 3L;
+    checkDeleteCount(expectedDeletes);
   }
 
   @Test
@@ -264,11 +265,8 @@ public abstract class DeleteReadTests {
       Assert.assertEquals("Table should contain expected rows", expected, selectColumns(actual, "id"));
     }
 
-    if (countDeletes()) {
-      long expectedDeletes = 3L;
-      long actualDeletes = deleteCount();
-      Assert.assertEquals("Table should contain expected number of deletes", expectedDeletes, actualDeletes);
-    }
+    long expectedDeletes = 3L;
+    checkDeleteCount(expectedDeletes);
   }
 
   @Test
@@ -304,11 +302,8 @@ public abstract class DeleteReadTests {
     StructLikeSet actual = rowSet(tableName, table, "*");
 
     Assert.assertEquals("Table should contain expected rows", expected, actual);
-    if (countDeletes()) {
-      long expectedDeletes = 7L; // 3 deletes in the first data file and 4 deletes in the second data file
-      long actualDeletes = deleteCount();
-      Assert.assertEquals("Table should contain expected number of deletes", expectedDeletes, actualDeletes);
-    }
+    long expectedDeletes = 7L; // 3 deletes in the first data file and 4 deletes in the second data file
+    checkDeleteCount(expectedDeletes);
   }
 
   @Test
@@ -331,11 +326,8 @@ public abstract class DeleteReadTests {
     StructLikeSet actual = rowSet(tableName, table, "*");
 
     Assert.assertEquals("Table should contain expected rows", expected, actual);
-    if (countDeletes()) {
-      long expectedDeletes = 3L;
-      long actualDeletes = deleteCount();
-      Assert.assertEquals("Table should contain expected number of deletes", expectedDeletes, actualDeletes);
-    }
+    long expectedDeletes = 3L;
+    checkDeleteCount(expectedDeletes);
   }
 
   @Test
@@ -369,11 +361,8 @@ public abstract class DeleteReadTests {
     StructLikeSet actual = rowSet(tableName, table, "*");
 
     Assert.assertEquals("Table should contain expected rows", expected, actual);
-    if (countDeletes()) {
-      long expectedDeletes = 3L;
-      long actualDeletes = deleteCount();
-      Assert.assertEquals("Table should contain expected number of deletes", expectedDeletes, actualDeletes);
-    }
+    long expectedDeletes = 3L;
+    checkDeleteCount(expectedDeletes);
   }
 
   @Test
@@ -407,11 +396,8 @@ public abstract class DeleteReadTests {
     StructLikeSet actual = rowSet(tableName, table, "*");
 
     Assert.assertEquals("Table should contain expected rows", expected, actual);
-    if (countDeletes()) {
-      long expectedDeletes = 4L;
-      long actualDeletes = deleteCount();
-      Assert.assertEquals("Table should contain expected number of deletes", expectedDeletes, actualDeletes);
-    }
+    long expectedDeletes = 4L;
+    checkDeleteCount(expectedDeletes);
   }
 
   @Test
@@ -446,11 +432,8 @@ public abstract class DeleteReadTests {
     StructLikeSet actual = rowSet(tableName, table, "*");
 
     Assert.assertEquals("Table should contain expected rows", expected, actual);
-    if (countDeletes()) {
-      long expectedDeletes = 4L;
-      long actualDeletes = deleteCount();
-      Assert.assertEquals("Table should contain expected number of deletes", expectedDeletes, actualDeletes);
-    }
+    long expectedDeletes = 4L;
+    checkDeleteCount(expectedDeletes);
   }
 
   @Test
@@ -488,11 +471,8 @@ public abstract class DeleteReadTests {
     StructLikeSet actual = rowSet(tableName, table, "*");
 
     Assert.assertEquals("Table should contain expected rows", expected, actual);
-    if (countDeletes()) {
-      long expectedDeletes = 1L;
-      long actualDeletes = deleteCount();
-      Assert.assertEquals("Table should contain expected number of deletes", expectedDeletes, actualDeletes);
-    }
+    long expectedDeletes = 1L;
+    checkDeleteCount(expectedDeletes);
   }
 
   private StructLikeSet selectColumns(StructLikeSet rows, String... columns) {

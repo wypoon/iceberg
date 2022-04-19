@@ -310,10 +310,7 @@ public class TestSparkReaderDeletes extends DeleteReadTests {
     StructLikeSet actual = rowSet(tableName, table, "*");
 
     Assert.assertEquals("Table should contain expected rows", expected, actual);
-    if (countDeletes()) {
-      long expectedDeletes = 4L;
-      long actualDeletes = deleteCount();
-      Assert.assertEquals("Table should contain expected number of deletes", expectedDeletes, actualDeletes);
-    }
+    long expectedDeletes = 4L;
+    checkDeleteCount(expectedDeletes);
   }
 }
