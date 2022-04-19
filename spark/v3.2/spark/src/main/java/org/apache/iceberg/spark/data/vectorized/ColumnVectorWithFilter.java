@@ -97,9 +97,18 @@ public class ColumnVectorWithFilter extends IcebergArrowColumnVector {
     return accessor().getBinary(rowIdMapping[rowId]);
   }
 
+  static ConstantColumnVector constantColumnVector(VectorHolder holder, int numRows) {
+    Object constant = ((ConstantVectorHolder) holder).getConstant();
+    if (constant instanceof Boolean) {
+      return new ConstantColumnVector(Types.BooleanType.get(), numRows, constant);
+    } else {
+      return new ConstantColumnVector(Types.IntegerType.get(), numRows, constant);
+    }
+  }
+
   public static ColumnVector forHolder(VectorHolder holder, int[] rowIdMapping, int numRows) {
     return holder.isDummy() ?
-        new ConstantColumnVector(Types.IntegerType.get(), numRows, ((ConstantVectorHolder) holder).getConstant()) :
+        constantColumnVector(holder, numRows) :
         new ColumnVectorWithFilter(holder, rowIdMapping);
   }
 }

@@ -35,6 +35,8 @@ import org.apache.parquet.hadoop.metadata.ColumnPath;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.vectorized.ColumnVector;
 import org.apache.spark.sql.vectorized.ColumnarBatch;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * {@link VectorizedReader} that returns Spark's {@link ColumnarBatch} to support Spark's vectorized read path. The
@@ -42,6 +44,7 @@ import org.apache.spark.sql.vectorized.ColumnarBatch;
  * {@linkplain VectorizedArrowReader VectorReader(s)}.
  */
 public class ColumnarBatchReader extends BaseBatchReader<ColumnarBatch> {
+  private static final Logger LOG = LoggerFactory.getLogger(ColumnarBatchReader.class);
   private DeleteFilter<InternalRow> deletes = null;
   private long rowStartPosInBatch = 0;
 
@@ -162,6 +165,8 @@ public class ColumnarBatchReader extends BaseBatchReader<ColumnarBatch> {
         if (!deletedRowPositions.isDeleted(originalRowId + rowStartPosInBatch)) {
           posDelRowIdMapping[currentRowId] = originalRowId;
           currentRowId++;
+        } else {
+          LOG.trace("skipping a deleted row that is in the PositionDeleteIndex");
         }
         originalRowId++;
       }
@@ -195,20 +200,7 @@ public class ColumnarBatchReader extends BaseBatchReader<ColumnarBatch> {
      */
     void applyEqDelete() {
       Iterator<InternalRow> it = columnarBatch.rowIterator();
-      int rowId = 0;
-      int currentRowId = 0;
-      while (it.hasNext()) {
-        InternalRow row = it.next();
-        if (deletes.eqDeletedRowFilter().test(row)) {
-          // the row is NOT deleted
-          // skip deleted rows by pointing to the next undeleted row Id
-          rowIdMapping[currentRowId] = rowIdMapping[rowId];
-          currentRowId++;
-        }
-
-        rowId++;
-      }
-
+      int currentRowId = deletes.applyEqDeletes(it, rowIdMapping);
       columnarBatch.setNumRows(currentRowId);
     }
   }

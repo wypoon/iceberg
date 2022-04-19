@@ -38,8 +38,11 @@ import org.apache.iceberg.types.Types;
 import org.apache.iceberg.util.Filter;
 import org.apache.iceberg.util.SortedMerge;
 import org.apache.iceberg.util.StructLikeSet;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class Deletes {
+  private static final Logger LOG = LoggerFactory.getLogger(Deletes.class);
   private static final Schema POSITION_DELETE_SCHEMA = new Schema(
       MetadataColumns.DELETE_FILE_PATH,
       MetadataColumns.DELETE_FILE_POS
@@ -66,10 +69,12 @@ public class Deletes {
   public static <T> CloseableIterable<T> filter(CloseableIterable<T> rows, Function<T, Long> rowToPosition,
                                                 PositionDeleteIndex deleteSet) {
     if (deleteSet.isEmpty()) {
+      LOG.debug("delete index is empty");
       return rows;
     }
 
     PositionSetDeleteFilter<T> filter = new PositionSetDeleteFilter<>(rowToPosition, deleteSet);
+    LOG.debug("returning new PositionSetDeleteFilter");
     return filter.filter(rows);
   }
 
@@ -84,16 +89,17 @@ public class Deletes {
   }
 
   public static <T extends StructLike> PositionDeleteIndex toPositionIndex(CharSequence dataLocation,
-                                                                           List<CloseableIterable<T>> deleteFiles) {
+                                                                           List<CloseableIterable<T>> deleteFiles,
+                                                                           DeleteCounter counter) {
     DataFileFilter<T> locationFilter = new DataFileFilter<>(dataLocation);
     List<CloseableIterable<Long>> positions = Lists.transform(deleteFiles, deletes ->
         CloseableIterable.transform(locationFilter.filter(deletes), row -> (Long) POSITION_ACCESSOR.get(row)));
-    return toPositionIndex(CloseableIterable.concat(positions));
+    return toPositionIndex(CloseableIterable.concat(positions), counter);
   }
 
-  public static PositionDeleteIndex toPositionIndex(CloseableIterable<Long> posDeletes) {
+  public static PositionDeleteIndex toPositionIndex(CloseableIterable<Long> posDeletes, DeleteCounter counter) {
     try (CloseableIterable<Long> deletes = posDeletes) {
-      PositionDeleteIndex positionDeleteIndex = new BitmapPositionDeleteIndex();
+      PositionDeleteIndex positionDeleteIndex = new BitmapPositionDeleteIndex(counter);
       deletes.forEach(positionDeleteIndex::delete);
       return positionDeleteIndex;
     } catch (IOException e) {
@@ -101,10 +107,27 @@ public class Deletes {
     }
   }
 
+  public static <T extends StructLike> PositionDeleteIndex toPositionIndex(CharSequence dataLocation,
+                                                                           List<CloseableIterable<T>> deleteFiles) {
+    return toPositionIndex(dataLocation, deleteFiles, null);
+  }
+
+  public static PositionDeleteIndex toPositionIndex(CloseableIterable<Long> posDeletes) {
+    return toPositionIndex(posDeletes, null);
+  }
+
   public static <T> CloseableIterable<T> streamingFilter(CloseableIterable<T> rows,
                                                          Function<T, Long> rowToPosition,
                                                          CloseableIterable<Long> posDeletes) {
-    return new PositionStreamDeleteFilter<>(rows, rowToPosition, posDeletes);
+    return streamingFilter(rows, rowToPosition, posDeletes, null);
+  }
+
+  public static <T> CloseableIterable<T> streamingFilter(CloseableIterable<T> rows,
+                                                         Function<T, Long> rowToPosition,
+                                                         CloseableIterable<Long> posDeletes,
+                                                         DeleteCounter counter) {
+    LOG.debug("returning new PositionStreamDeleteFilter");
+    return new PositionStreamDeleteFilter<>(rows, rowToPosition, posDeletes, counter);
   }
 
   public static CloseableIterable<Long> deletePositions(CharSequence dataLocation,
@@ -122,6 +145,8 @@ public class Deletes {
   }
 
   private static class EqualitySetDeleteFilter<T> extends Filter<T> {
+    private static final Logger LOG = LoggerFactory.getLogger(EqualitySetDeleteFilter.class);
+
     private final StructLikeSet deletes;
     private final Function<T, StructLike> extractEqStruct;
 
@@ -133,11 +158,17 @@ public class Deletes {
 
     @Override
     protected boolean shouldKeep(T row) {
-      return !deletes.contains(extractEqStruct.apply(row));
+      boolean keep = !deletes.contains(extractEqStruct.apply(row));
+      if (!keep) {
+        LOG.trace("skipping a row");
+      }
+      return keep;
     }
   }
 
   private static class PositionSetDeleteFilter<T> extends Filter<T> {
+    private static final Logger LOG = LoggerFactory.getLogger(PositionSetDeleteFilter.class);
+
     private final Function<T, Long> rowToPosition;
     private final PositionDeleteIndex deleteSet;
 
@@ -148,20 +179,28 @@ public class Deletes {
 
     @Override
     protected boolean shouldKeep(T row) {
-      return !deleteSet.isDeleted(rowToPosition.apply(row));
+      boolean keep = !deleteSet.isDeleted(rowToPosition.apply(row));
+      if (!keep) {
+        LOG.trace("skipping a row");
+      }
+      return keep;
     }
   }
 
   private static class PositionStreamDeleteFilter<T> extends CloseableGroup implements CloseableIterable<T> {
+    private static final Logger LOG = LoggerFactory.getLogger(PositionStreamDeleteFilter.class);
+
     private final CloseableIterable<T> rows;
     private final Function<T, Long> extractPos;
     private final CloseableIterable<Long> deletePositions;
+    private final DeleteCounter counter;
 
     private PositionStreamDeleteFilter(CloseableIterable<T> rows, Function<T, Long> extractPos,
-                                       CloseableIterable<Long> deletePositions) {
+                                       CloseableIterable<Long> deletePositions, DeleteCounter counter) {
       this.rows = rows;
       this.extractPos = extractPos;
       this.deletePositions = deletePositions;
+      this.counter = counter;
     }
 
     @Override
@@ -170,7 +209,7 @@ public class Deletes {
 
       CloseableIterator<T> iter;
       if (deletePosIterator.hasNext()) {
-        iter = new PositionFilterIterator(rows.iterator(), deletePosIterator);
+        iter = new PositionFilterIterator(rows.iterator(), deletePosIterator, counter);
       } else {
         iter = rows.iterator();
         try {
@@ -187,11 +226,14 @@ public class Deletes {
 
     private class PositionFilterIterator extends FilterIterator<T> {
       private final CloseableIterator<Long> deletePosIterator;
+      private final DeleteCounter counter;
       private long nextDeletePos;
 
-      protected PositionFilterIterator(CloseableIterator<T> items, CloseableIterator<Long> deletePositions) {
+      protected PositionFilterIterator(CloseableIterator<T> items, CloseableIterator<Long> deletePositions,
+                                       DeleteCounter counter) {
         super(items);
         this.deletePosIterator = deletePositions;
+        this.counter = counter;
         this.nextDeletePos = deletePosIterator.next();
       }
 
@@ -212,6 +254,10 @@ public class Deletes {
           }
         }
 
+        if (!keep && counter != null) {
+          LOG.trace("skipping a row");
+          counter.increment();
+        }
         return keep;
       }
 

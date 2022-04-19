@@ -20,6 +20,7 @@
 package org.apache.iceberg.data;
 
 import java.util.Collection;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -34,6 +35,7 @@ import org.apache.iceberg.avro.Avro;
 import org.apache.iceberg.data.avro.DataReader;
 import org.apache.iceberg.data.orc.GenericOrcReader;
 import org.apache.iceberg.data.parquet.GenericParquetReaders;
+import org.apache.iceberg.deletes.DeleteCounter;
 import org.apache.iceberg.deletes.Deletes;
 import org.apache.iceberg.deletes.PositionDeleteIndex;
 import org.apache.iceberg.expressions.Expressions;
@@ -54,8 +56,11 @@ import org.apache.iceberg.types.Types;
 import org.apache.iceberg.util.Filter;
 import org.apache.iceberg.util.StructLikeSet;
 import org.apache.iceberg.util.StructProjection;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public abstract class DeleteFilter<T> {
+  private static final Logger LOG = LoggerFactory.getLogger(DeleteFilter.class);
   private static final long DEFAULT_SET_FILTER_THRESHOLD = 100_000L;
   private static final Schema POS_DELETE_SCHEMA = new Schema(
       MetadataColumns.DELETE_FILE_PATH,
@@ -67,22 +72,26 @@ public abstract class DeleteFilter<T> {
   private final List<DeleteFile> eqDeletes;
   private final Schema requiredSchema;
   private final Accessor<StructLike> posAccessor;
+  private final DeleteCounter counter;
 
   private PositionDeleteIndex deleteRowPositions = null;
-  private Predicate<T> eqDeleteRows = null;
 
-  protected DeleteFilter(String filePath, List<DeleteFile> deletes, Schema tableSchema, Schema requestedSchema) {
+  protected DeleteFilter(String filePath, List<DeleteFile> deletes, Schema tableSchema, Schema requestedSchema,
+      DeleteCounter counter) {
     this.setFilterThreshold = DEFAULT_SET_FILTER_THRESHOLD;
     this.filePath = filePath;
+    this.counter = counter;
 
     ImmutableList.Builder<DeleteFile> posDeleteBuilder = ImmutableList.builder();
     ImmutableList.Builder<DeleteFile> eqDeleteBuilder = ImmutableList.builder();
     for (DeleteFile delete : deletes) {
       switch (delete.content()) {
         case POSITION_DELETES:
+          LOG.trace("adding position delete file {} to filter", delete.path());
           posDeleteBuilder.add(delete);
           break;
         case EQUALITY_DELETES:
+          LOG.trace("adding equality delete file {} to filter", delete.path());
           eqDeleteBuilder.add(delete);
           break;
         default:
@@ -94,6 +103,10 @@ public abstract class DeleteFilter<T> {
     this.eqDeletes = eqDeleteBuilder.build();
     this.requiredSchema = fileProjection(tableSchema, requestedSchema, posDeletes, eqDeletes);
     this.posAccessor = requiredSchema.accessorForField(MetadataColumns.ROW_POSITION.fieldId());
+  }
+
+  protected DeleteFilter(String filePath, List<DeleteFile> deletes, Schema tableSchema, Schema requestedSchema) {
+    this(filePath, deletes, tableSchema, requestedSchema, null);
   }
 
   public Schema requiredSchema() {
@@ -172,7 +185,8 @@ public abstract class DeleteFilter<T> {
     Filter<T> deletedRowsFilter = new Filter<T>() {
       @Override
       protected boolean shouldKeep(T item) {
-        return deletedRows.test(item);
+        boolean keep = deletedRows.test(item); // true means row is deleted
+        return keep;
       }
     };
     return deletedRowsFilter.filter(records);
@@ -188,31 +202,52 @@ public abstract class DeleteFilter<T> {
     Filter<T> remainingRowsFilter = new Filter<T>() {
       @Override
       protected boolean shouldKeep(T item) {
-        return remainingRows.test(item);
+        boolean keep = remainingRows.test(item); // false means row is deleted
+        if (!keep && counter != null) {
+          counter.increment();
+        }
+        return keep;
       }
     };
 
     return remainingRowsFilter.filter(records);
   }
 
-  public Predicate<T> eqDeletedRowFilter() {
-    if (eqDeleteRows == null) {
-      eqDeleteRows = applyEqDeletes().stream()
-          .map(Predicate::negate)
-          .reduce(Predicate::and)
-          .orElse(t -> true);
+  public int applyEqDeletes(Iterator<T> records, int[] mapping) {
+    Predicate<T> remainingRows = applyEqDeletes().stream()
+        .map(Predicate::negate)
+        .reduce(Predicate::and)
+        .orElse(t -> true);
+
+    int rowId = 0;
+    int currentRowId = 0;
+    while (records.hasNext()) {
+      T row = records.next();
+      if (remainingRows.test(row)) {
+        // the row is NOT deleted
+        // skip deleted rows by pointing to the next undeleted row Id
+        mapping[currentRowId] = mapping[rowId];
+        currentRowId++;
+      } else if (counter != null) {
+        counter.increment();
+      }
+
+      rowId++;
     }
-    return eqDeleteRows;
+
+    return currentRowId;
   }
 
   public PositionDeleteIndex deletedRowPositions() {
+    LOG.debug("calling deletedRowPositions()");
     if (posDeletes.isEmpty()) {
+      LOG.debug("no position deletes");
       return null;
     }
 
     if (deleteRowPositions == null) {
       List<CloseableIterable<Record>> deletes = Lists.transform(posDeletes, this::openPosDeletes);
-      deleteRowPositions = Deletes.toPositionIndex(filePath, deletes);
+      deleteRowPositions = Deletes.toPositionIndex(filePath, deletes, counter);
     }
     return deleteRowPositions;
   }
@@ -226,10 +261,10 @@ public abstract class DeleteFilter<T> {
 
     // if there are fewer deletes than a reasonable number to keep in memory, use a set
     if (posDeletes.stream().mapToLong(DeleteFile::recordCount).sum() < setFilterThreshold) {
-      return Deletes.filter(records, this::pos, Deletes.toPositionIndex(filePath, deletes));
+      return Deletes.filter(records, this::pos, Deletes.toPositionIndex(filePath, deletes, counter));
     }
 
-    return Deletes.streamingFilter(records, this::pos, Deletes.deletePositions(filePath, deletes));
+    return Deletes.streamingFilter(records, this::pos, Deletes.deletePositions(filePath, deletes), counter);
   }
 
   private CloseableIterable<Record> openPosDeletes(DeleteFile file) {
@@ -237,6 +272,7 @@ public abstract class DeleteFilter<T> {
   }
 
   private CloseableIterable<Record> openDeletes(DeleteFile deleteFile, Schema deleteSchema) {
+    LOG.trace("opening delete file {}", deleteFile.path());
     InputFile input = getInputFile(deleteFile.path().toString());
     switch (deleteFile.format()) {
       case AVRO:

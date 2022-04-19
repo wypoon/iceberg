@@ -20,6 +20,7 @@
 package org.apache.iceberg.spark.source;
 
 import java.io.IOException;
+import java.util.Iterator;
 import java.util.List;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.iceberg.BaseTable;
@@ -56,7 +57,10 @@ import org.apache.iceberg.util.TableScanUtil;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.internal.SQLConf;
+import org.apache.spark.sql.types.StructType;
+import org.apache.spark.sql.vectorized.ColumnarBatch;
 import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.BeforeClass;
@@ -72,17 +76,22 @@ public class TestSparkReaderDeletes extends DeleteReadTests {
   private static TestHiveMetastore metastore = null;
   protected static SparkSession spark = null;
   protected static HiveCatalog catalog = null;
+  private final String format;
   private final boolean vectorized;
+  private long deleteCount;
 
-  public TestSparkReaderDeletes(boolean vectorized) {
+  public TestSparkReaderDeletes(String format, boolean vectorized) {
+    this.format = format;
     this.vectorized = vectorized;
   }
 
-  @Parameterized.Parameters(name = "vectorized = {0}")
+  @Parameterized.Parameters(name = "format = {0}, vectorized = {1}")
   public static Object[][] parameters() {
     return new Object[][] {
-        new Object[] {false},
-        new Object[] {true}
+        new Object[] {"parquet", false},
+        new Object[] {"parquet", true},
+        new Object[] {"orc", false},
+        new Object[] {"avro", false}
     };
   }
 
@@ -124,7 +133,10 @@ public class TestSparkReaderDeletes extends DeleteReadTests {
     TableOperations ops = ((BaseTable) table).operations();
     TableMetadata meta = ops.current();
     ops.commit(meta, meta.upgradeToFormatVersion(2));
-    if (vectorized) {
+    table.updateProperties()
+        .set(TableProperties.DEFAULT_FILE_FORMAT, format)
+        .commit();
+    if (format.equals("parquet") && vectorized) {
       table.updateProperties()
           .set(TableProperties.PARQUET_VECTORIZATION_ENABLED, "true")
           .set(TableProperties.PARQUET_BATCH_SIZE, "4") // split 7 records to two batches to cover more code paths
@@ -139,18 +151,55 @@ public class TestSparkReaderDeletes extends DeleteReadTests {
   }
 
   @Override
-  public StructLikeSet rowSet(String name, Table table, String... columns) {
-    Dataset<Row> df = spark.read()
-        .format("iceberg")
-        .load(TableIdentifier.of("default", name).toString())
-        .selectExpr(columns);
+  protected boolean countDeletes() {
+    return true;
+  }
 
-    Types.StructType projection = table.schema().select(columns).asStruct();
-    StructLikeSet set = StructLikeSet.create(projection);
-    df.collectAsList().forEach(row -> {
-      SparkStructLike rowWrapper = new SparkStructLike(projection);
-      set.add(rowWrapper.wrap(row));
-    });
+  private void setDeleteCount(long count) {
+    deleteCount = count;
+  }
+
+  @Override
+  protected long deleteCount() {
+    return deleteCount;
+  }
+
+  @Override
+  public StructLikeSet rowSet(String name, Table table, String... columns) throws IOException {
+    Schema schema = table.schema().select(columns);
+    StructType sparkSchema = SparkSchemaUtil.convert(schema);
+    Types.StructType type = schema.asStruct();
+    StructLikeSet set = StructLikeSet.create(type);
+
+    CloseableIterable<CombinedScanTask> tasks = TableScanUtil.planTasks(
+        table.newScan().planFiles(),
+        TableProperties.METADATA_SPLIT_SIZE_DEFAULT,
+        TableProperties.SPLIT_LOOKBACK_DEFAULT,
+        TableProperties.SPLIT_OPEN_FILE_COST_DEFAULT);
+
+    long delCount = 0L;
+    for (CombinedScanTask task : tasks) {
+      if (format.equals("parquet") && vectorized) {
+        try (BatchDataReader reader = new BatchDataReader(task, table, schema, false, 4)) {
+          while (reader.next()) {
+            ColumnarBatch columnarBatch = reader.get();
+            Iterator<InternalRow> iter = columnarBatch.rowIterator();
+            while (iter.hasNext()) {
+              set.add(new InternalRowWrapper(sparkSchema).wrap(iter.next().copy()));
+            }
+          }
+          delCount += (reader.counter().get());
+        }
+      } else {
+        try (RowDataReader reader = new RowDataReader(task, table, schema, false)) {
+          while (reader.next()) {
+            set.add(new InternalRowWrapper(sparkSchema).wrap(reader.get().copy()));
+          }
+          delCount += (reader.counter().get());
+        }
+      }
+    }
+    setDeleteCount(delCount);
 
     return set;
   }
@@ -261,5 +310,10 @@ public class TestSparkReaderDeletes extends DeleteReadTests {
     StructLikeSet actual = rowSet(tableName, table, "*");
 
     Assert.assertEquals("Table should contain expected rows", expected, actual);
+    if (countDeletes()) {
+      long expectedDeletes = 4L;
+      long actualDeletes = deleteCount();
+      Assert.assertEquals("Table should contain expected number of deletes", expectedDeletes, actualDeletes);
+    }
   }
 }
