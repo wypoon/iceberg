@@ -136,6 +136,7 @@ public class ColumnarBatchReader extends BaseBatchReader<ColumnarBatch> {
 
     Pair<int[], Integer> posDelRowIdMapping(int numRowsToRead) {
       if (deletes != null && deletes.hasPosDeletes()) {
+        LOG.debug("Building row id mapping from positional deletes");
         return buildPosDelRowIdMapping(deletes.deletedRowPositions(), numRowsToRead);
       } else {
         return null;
@@ -165,8 +166,6 @@ public class ColumnarBatchReader extends BaseBatchReader<ColumnarBatch> {
         if (!deletedRowPositions.isDeleted(originalRowId + rowStartPosInBatch)) {
           posDelRowIdMapping[currentRowId] = originalRowId;
           currentRowId++;
-        } else {
-          LOG.trace("skipping a deleted row that is in the PositionDeleteIndex");
         }
         originalRowId++;
       }
@@ -200,6 +199,7 @@ public class ColumnarBatchReader extends BaseBatchReader<ColumnarBatch> {
      */
     void applyEqDelete() {
       Iterator<InternalRow> it = columnarBatch.rowIterator();
+      LOG.debug("Applying equality deletes to row id mapping");
       int currentRowId = deletes.applyEqDeletes(it, rowIdMapping);
       columnarBatch.setNumRows(currentRowId);
     }

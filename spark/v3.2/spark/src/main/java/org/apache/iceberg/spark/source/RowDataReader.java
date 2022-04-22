@@ -73,13 +73,13 @@ class RowDataReader extends BaseDataReader<InternalRow> {
 
   @Override
   CloseableIterator<InternalRow> open(FileScanTask task) {
-    LOG.debug("calling open, constructing SparkDeleteFilter ...");
     SparkDeleteFilter deletes = new SparkDeleteFilter(task, tableSchema, expectedSchema, counter);
 
     // schema or rows returned by readers
     Schema requiredSchema = deletes.requiredSchema();
     Map<Integer, ?> idToConstant = constantsMap(task, expectedSchema);
     DataFile file = task.file();
+    LOG.debug("Opening data file {}", file.path());
 
     // update the current file for Spark's filename() function
     InputFileBlockHolder.set(file.path().toString(), task.start(), task.length());

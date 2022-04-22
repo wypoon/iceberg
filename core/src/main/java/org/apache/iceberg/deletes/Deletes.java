@@ -145,8 +145,6 @@ public class Deletes {
   }
 
   private static class EqualitySetDeleteFilter<T> extends Filter<T> {
-    private static final Logger LOG = LoggerFactory.getLogger(EqualitySetDeleteFilter.class);
-
     private final StructLikeSet deletes;
     private final Function<T, StructLike> extractEqStruct;
 
@@ -158,17 +156,11 @@ public class Deletes {
 
     @Override
     protected boolean shouldKeep(T row) {
-      boolean keep = !deletes.contains(extractEqStruct.apply(row));
-      if (!keep) {
-        LOG.trace("skipping a row");
-      }
-      return keep;
+      return !deletes.contains(extractEqStruct.apply(row));
     }
   }
 
   private static class PositionSetDeleteFilter<T> extends Filter<T> {
-    private static final Logger LOG = LoggerFactory.getLogger(PositionSetDeleteFilter.class);
-
     private final Function<T, Long> rowToPosition;
     private final PositionDeleteIndex deleteSet;
 
@@ -179,17 +171,11 @@ public class Deletes {
 
     @Override
     protected boolean shouldKeep(T row) {
-      boolean keep = !deleteSet.isDeleted(rowToPosition.apply(row));
-      if (!keep) {
-        LOG.trace("skipping a row");
-      }
-      return keep;
+      return !deleteSet.isDeleted(rowToPosition.apply(row));
     }
   }
 
   private static class PositionStreamDeleteFilter<T> extends CloseableGroup implements CloseableIterable<T> {
-    private static final Logger LOG = LoggerFactory.getLogger(PositionStreamDeleteFilter.class);
-
     private final CloseableIterable<T> rows;
     private final Function<T, Long> extractPos;
     private final CloseableIterable<Long> deletePositions;
@@ -254,10 +240,6 @@ public class Deletes {
           }
         }
 
-        if (!keep && counter != null) {
-          LOG.trace("skipping a row");
-          counter.increment();
-        }
         return keep;
       }
 

@@ -75,7 +75,7 @@ class BatchDataReader extends BaseDataReader<ColumnarBatch> {
   @Override
   CloseableIterator<ColumnarBatch> open(FileScanTask task) {
     DataFile file = task.file();
-    LOG.debug("opening data file {}", file.path());
+    LOG.debug("Opening data file {}", file.path());
 
     // update the current file for Spark's filename() function
     InputFileBlockHolder.set(file.path().toString(), task.start(), task.length());
@@ -86,7 +86,6 @@ class BatchDataReader extends BaseDataReader<ColumnarBatch> {
     InputFile location = getInputFile(task);
     Preconditions.checkNotNull(location, "Could not find InputFile associated with FileScanTask");
     if (task.file().format() == FileFormat.PARQUET) {
-      LOG.debug("data file is parquet; calling deleteFilter to get SparkDeleteFilter ...");
       SparkDeleteFilter deleteFilter = deleteFilter(task);
       // get required schema for filtering out equality-delete rows in case equality-delete uses columns are
       // not selected.
@@ -138,8 +137,12 @@ class BatchDataReader extends BaseDataReader<ColumnarBatch> {
   }
 
   private SparkDeleteFilter deleteFilter(FileScanTask task) {
-    LOG.debug("is task.deletes() empty? {}", task.deletes().isEmpty());
-    return task.deletes().isEmpty() ? null : new SparkDeleteFilter(task, table().schema(), expectedSchema, counter);
+    if (task.deletes().isEmpty()) {
+      return null;
+    } else {
+      LOG.debug("Creating a SparkDeleteFilter");
+      return new SparkDeleteFilter(task, table().schema(), expectedSchema, counter);
+    }
   }
 
   private Schema requiredSchema(DeleteFilter deleteFilter) {

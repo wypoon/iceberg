@@ -87,11 +87,11 @@ public abstract class DeleteFilter<T> {
     for (DeleteFile delete : deletes) {
       switch (delete.content()) {
         case POSITION_DELETES:
-          LOG.trace("adding position delete file {} to filter", delete.path());
+          LOG.debug("Adding position delete file {} to filter", delete.path());
           posDeleteBuilder.add(delete);
           break;
         case EQUALITY_DELETES:
-          LOG.trace("adding equality delete file {} to filter", delete.path());
+          LOG.debug("Adding equality delete file {} to filter", delete.path());
           eqDeleteBuilder.add(delete);
           break;
         default:
@@ -185,8 +185,7 @@ public abstract class DeleteFilter<T> {
     Filter<T> deletedRowsFilter = new Filter<T>() {
       @Override
       protected boolean shouldKeep(T item) {
-        boolean keep = deletedRows.test(item); // true means row is deleted
-        return keep;
+        return deletedRows.test(item);
       }
     };
     return deletedRowsFilter.filter(records);
@@ -239,9 +238,7 @@ public abstract class DeleteFilter<T> {
   }
 
   public PositionDeleteIndex deletedRowPositions() {
-    LOG.debug("calling deletedRowPositions()");
     if (posDeletes.isEmpty()) {
-      LOG.debug("no position deletes");
       return null;
     }
 
@@ -272,7 +269,7 @@ public abstract class DeleteFilter<T> {
   }
 
   private CloseableIterable<Record> openDeletes(DeleteFile deleteFile, Schema deleteSchema) {
-    LOG.trace("opening delete file {}", deleteFile.path());
+    LOG.trace("Opening delete file {}", deleteFile.path());
     InputFile input = getInputFile(deleteFile.path().toString());
     switch (deleteFile.format()) {
       case AVRO:
