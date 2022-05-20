@@ -23,15 +23,9 @@ import org.roaringbitmap.longlong.Roaring64Bitmap;
 
 class BitmapPositionDeleteIndex implements PositionDeleteIndex {
   private final Roaring64Bitmap roaring64Bitmap;
-  private final DeleteCounter counter;
-
-  BitmapPositionDeleteIndex(DeleteCounter counter) {
-    roaring64Bitmap = new Roaring64Bitmap();
-    this.counter = counter;
-  }
 
   BitmapPositionDeleteIndex() {
-    this(null);
+    roaring64Bitmap = new Roaring64Bitmap();
   }
 
   @Override
@@ -46,15 +40,15 @@ class BitmapPositionDeleteIndex implements PositionDeleteIndex {
 
   @Override
   public boolean isDeleted(long position) {
-    boolean posIsDeleted = roaring64Bitmap.contains(position);
-    if (counter != null && posIsDeleted) {
-      counter.increment();
-    }
-    return posIsDeleted;
+    return roaring64Bitmap.contains(position);
   }
 
   @Override
   public boolean isEmpty() {
     return roaring64Bitmap.isEmpty();
+  }
+
+  public long numberOfPositionsDeleted() {
+    return roaring64Bitmap.getLongCardinality();
   }
 }

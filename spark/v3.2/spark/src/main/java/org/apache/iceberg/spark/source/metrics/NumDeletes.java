@@ -24,6 +24,8 @@ import org.apache.spark.sql.connector.metric.CustomMetric;
 
 public class NumDeletes implements CustomMetric {
 
+  public static final String DISPLAY_STRING = "number of row deletes applied";
+
   @Override
   public String name() {
     return "numDeletes";
@@ -31,7 +33,7 @@ public class NumDeletes implements CustomMetric {
 
   @Override
   public String description() {
-    return "number of row deletes applied";
+    return DISPLAY_STRING;
   }
 
   @Override

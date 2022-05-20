@@ -35,9 +35,6 @@ public interface PositionDeleteIndex {
 
   /**
    * Checks whether a row at the position is deleted.
-   * Implementations may have non-idempotent side effects (e.g., increment a counter),
-   * so even though they may return the same value for a given input every time,
-   * repeated calls for the same input may have undesired side effects.
    * @param position deleted row position
    * @return whether the position is deleted
    */

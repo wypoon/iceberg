@@ -27,6 +27,10 @@ public class DeleteCounter {
     count++;
   }
 
+  public void increment(long delta) {
+    count += delta;
+  }
+
   public long get() {
     return count;
   }

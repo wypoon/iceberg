@@ -99,8 +99,11 @@ public class Deletes {
 
   public static PositionDeleteIndex toPositionIndex(CloseableIterable<Long> posDeletes, DeleteCounter counter) {
     try (CloseableIterable<Long> deletes = posDeletes) {
-      PositionDeleteIndex positionDeleteIndex = new BitmapPositionDeleteIndex(counter);
+      PositionDeleteIndex positionDeleteIndex = new BitmapPositionDeleteIndex();
       deletes.forEach(positionDeleteIndex::delete);
+      if (counter != null) {
+        counter.increment(((BitmapPositionDeleteIndex) positionDeleteIndex).numberOfPositionsDeleted());
+      }
       return positionDeleteIndex;
     } catch (IOException e) {
       throw new UncheckedIOException("Failed to close position delete source", e);
@@ -240,6 +243,9 @@ public class Deletes {
           }
         }
 
+        if (!keep && counter != null) {
+          counter.increment();
+        }
         return keep;
       }
 
