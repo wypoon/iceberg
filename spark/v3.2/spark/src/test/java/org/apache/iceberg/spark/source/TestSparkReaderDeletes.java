@@ -63,6 +63,7 @@ import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.execution.ui.SQLAppStatusStore;
 import org.apache.spark.sql.execution.ui.SQLExecutionUIData;
 import org.apache.spark.sql.execution.ui.SQLPlanMetric;
+import org.apache.spark.sql.execution.ui.SparkListenerSQLExecutionEnd;
 import org.apache.spark.sql.execution.ui.SparkListenerSQLExecutionStart;
 import org.apache.spark.sql.internal.SQLConf;
 import org.junit.AfterClass;
@@ -80,21 +81,32 @@ public class TestSparkReaderDeletes extends DeleteReadTests {
 
   // SparkListener for tracking executionIds
   private static class TestSparkListener extends SparkListener {
-    private List<Long> executionIds = Lists.newArrayList();
+    private final List<Long> executionIds = Lists.newArrayList();
+    private final List<Long> completedExecutionIds = Lists.newArrayList();
 
     public List<Long> executed() {
       return executionIds;
+    }
+
+    public List<Long> completed() {
+      return completedExecutionIds;
     }
 
     @Override
     public void onOtherEvent(SparkListenerEvent event) {
       if (event instanceof SparkListenerSQLExecutionStart) {
         onExecutionStart((SparkListenerSQLExecutionStart) event);
+      } else if (event instanceof SparkListenerSQLExecutionEnd) {
+        onExecutionEnd((SparkListenerSQLExecutionEnd) event);
       }
     }
 
     private void onExecutionStart(SparkListenerSQLExecutionStart event) {
       executionIds.add(event.executionId());
+    }
+
+    private void onExecutionEnd(SparkListenerSQLExecutionEnd event) {
+      completedExecutionIds.add(event.executionId());
     }
   }
 
@@ -211,6 +223,22 @@ public class TestSparkReaderDeletes extends DeleteReadTests {
     // Get the executionId of the query we just executed
     List<Long> executed = listener.executed();
     long lastExecuted = executed.get(executed.size() - 1);
+    // Ensure that the execution end was registered
+    long lastCompleted = -1;
+    for (int i = 0; i < 3; i++) {
+      List<Long> completed = listener.completed();
+      lastCompleted = completed.get(completed.size() - 1);
+      if (lastCompleted == lastExecuted) {
+        break;
+      } else {
+        try {
+          Thread.sleep(100L);
+        } catch (InterruptedException e) {
+          // do nothing
+        }
+      }
+    }
+    Assert.assertTrue("Execution end event was not received", lastCompleted == lastExecuted);
 
     // With the executionId, we can get the executionMetrics from the SQLAppStatusStore,
     // but that is a map of accumulatorId to string representation of the metric value.
