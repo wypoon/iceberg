@@ -220,6 +220,11 @@ public class TestSparkReaderDeletes extends DeleteReadTests {
       set.add(rowWrapper.wrap(row));
     });
 
+    extractDeleteCount();
+    return set;
+  }
+
+  private void extractDeleteCount() {
     // Get the executionId of the query we just executed
     List<Long> executed = listener.executed();
     long lastExecuted = executed.get(executed.size() - 1);
@@ -260,8 +265,6 @@ public class TestSparkReaderDeletes extends DeleteReadTests {
     Map<Object, String> executionMetrics = JavaConverters.mapAsJavaMap(statusStore.executionMetrics(lastExecuted));
     long delCount = Long.valueOf(executionMetrics.get(metricId));
     setDeleteCount(delCount);
-
-    return set;
   }
 
   @Test
