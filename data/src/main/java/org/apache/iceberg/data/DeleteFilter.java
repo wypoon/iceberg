@@ -106,7 +106,7 @@ public abstract class DeleteFilter<T> {
   }
 
   protected DeleteFilter(String filePath, List<DeleteFile> deletes, Schema tableSchema, Schema requestedSchema) {
-    this(filePath, deletes, tableSchema, requestedSchema, null);
+    this(filePath, deletes, tableSchema, requestedSchema, DeleteCounter.none());
   }
 
   public Schema requiredSchema() {
@@ -202,7 +202,7 @@ public abstract class DeleteFilter<T> {
       @Override
       protected boolean shouldKeep(T item) {
         boolean keep = remainingRows.test(item); // false means row is deleted
-        if (!keep && counter != null) {
+        if (!keep) {
           counter.increment();
         }
         return keep;
@@ -227,7 +227,7 @@ public abstract class DeleteFilter<T> {
         // skip deleted rows by pointing to the next undeleted row Id
         mapping[currentRowId] = mapping[rowId];
         currentRowId++;
-      } else if (counter != null) {
+      } else {
         counter.increment();
       }
 
