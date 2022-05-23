@@ -57,14 +57,17 @@ class BatchDataReader extends BaseDataReader<ColumnarBatch> {
   private final String nameMapping;
   private final boolean caseSensitive;
   private final int batchSize;
+  private final long streamDeleteFilterThreshold;
   private final DeleteCounter counter;
 
-  BatchDataReader(CombinedScanTask task, Table table, Schema expectedSchema, boolean caseSensitive, int size) {
+  BatchDataReader(CombinedScanTask task, Table table, Schema expectedSchema, boolean caseSensitive,
+      int size, long streamDeleteFilterThreshold) {
     super(table, task);
     this.expectedSchema = expectedSchema;
     this.nameMapping = table.properties().get(TableProperties.DEFAULT_NAME_MAPPING);
     this.caseSensitive = caseSensitive;
     this.batchSize = size;
+    this.streamDeleteFilterThreshold = streamDeleteFilterThreshold;
     this.counter = DeleteCounter.instance();
   }
 
@@ -141,7 +144,8 @@ class BatchDataReader extends BaseDataReader<ColumnarBatch> {
       return null;
     } else {
       LOG.debug("Creating a SparkDeleteFilter");
-      return new SparkDeleteFilter(task, table().schema(), expectedSchema, counter);
+      return new SparkDeleteFilter(task, table().schema(), expectedSchema, streamDeleteFilterThreshold,
+        counter);
     }
   }
 
@@ -156,8 +160,10 @@ class BatchDataReader extends BaseDataReader<ColumnarBatch> {
   private class SparkDeleteFilter extends DeleteFilter<InternalRow> {
     private final InternalRowWrapper asStructLike;
 
-    SparkDeleteFilter(FileScanTask task, Schema tableSchema, Schema requestedSchema, DeleteCounter counter) {
-      super(task.file().path().toString(), task.deletes(), tableSchema, requestedSchema, counter);
+    SparkDeleteFilter(FileScanTask task, Schema tableSchema, Schema requestedSchema,
+        long streamFilterThreshold, DeleteCounter counter) {
+      super(task.file().path().toString(), task.deletes(), tableSchema, requestedSchema,
+          streamFilterThreshold, counter);
       this.asStructLike = new InternalRowWrapper(SparkSchemaUtil.convert(requiredSchema()));
     }
 

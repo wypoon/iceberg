@@ -47,6 +47,7 @@ class SparkBatch implements Batch {
   private final Schema expectedSchema;
   private final boolean caseSensitive;
   private final boolean localityEnabled;
+  private final long streamDeleteFilterThreshold;
 
   SparkBatch(JavaSparkContext sparkContext, Table table, SparkReadConf readConf,
              List<CombinedScanTask> tasks, Schema expectedSchema) {
@@ -57,6 +58,7 @@ class SparkBatch implements Batch {
     this.expectedSchema = expectedSchema;
     this.caseSensitive = readConf.caseSensitive();
     this.localityEnabled = readConf.localityEnabled();
+    this.streamDeleteFilterThreshold = readConf.streamDeleteFilterThreshold();
   }
 
   @Override
@@ -72,7 +74,7 @@ class SparkBatch implements Batch {
         .executeWith(localityEnabled ? ThreadPools.getWorkerPool() : null)
         .run(index -> readTasks[index] = new ReadTask(
             tasks.get(index), tableBroadcast, expectedSchemaString,
-            caseSensitive, localityEnabled));
+            caseSensitive, localityEnabled, streamDeleteFilterThreshold));
 
     return readTasks;
   }

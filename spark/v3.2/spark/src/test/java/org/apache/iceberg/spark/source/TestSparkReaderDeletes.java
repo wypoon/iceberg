@@ -37,6 +37,7 @@ import org.apache.iceberg.TableProperties;
 import org.apache.iceberg.TestHelpers;
 import org.apache.iceberg.catalog.Namespace;
 import org.apache.iceberg.catalog.TableIdentifier;
+import org.apache.iceberg.data.DeleteFilter;
 import org.apache.iceberg.data.DeleteReadTests;
 import org.apache.iceberg.data.FileHelpers;
 import org.apache.iceberg.data.GenericRecord;
@@ -47,6 +48,7 @@ import org.apache.iceberg.hive.TestHiveMetastore;
 import org.apache.iceberg.io.CloseableIterable;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.relocated.com.google.common.collect.Lists;
+import org.apache.iceberg.spark.SparkReadOptions;
 import org.apache.iceberg.spark.SparkSchemaUtil;
 import org.apache.iceberg.spark.SparkStructLike;
 import org.apache.iceberg.spark.source.metrics.NumDeletes;
@@ -116,20 +118,22 @@ public class TestSparkReaderDeletes extends DeleteReadTests {
   protected static HiveCatalog catalog = null;
   private final String format;
   private final boolean vectorized;
+  private final boolean useStreamDeleteFilter;
   private long deleteCount;
 
-  public TestSparkReaderDeletes(String format, boolean vectorized) {
+  public TestSparkReaderDeletes(String format, boolean vectorized, boolean useStreamDeleteFilter) {
     this.format = format;
     this.vectorized = vectorized;
+    this.useStreamDeleteFilter = useStreamDeleteFilter;
   }
 
-  @Parameterized.Parameters(name = "format = {0}, vectorized = {1}")
+  @Parameterized.Parameters(name = "format = {0}, vectorized = {1}, useStreamDeleteFilter = {2}")
   public static Object[][] parameters() {
     return new Object[][] {
-        new Object[] {"parquet", false},
-        new Object[] {"parquet", true},
-        new Object[] {"orc", false},
-        new Object[] {"avro", false}
+        new Object[] {"parquet", false, true},
+        new Object[] {"parquet", true, false},
+        new Object[] {"orc", false, true},
+        new Object[] {"avro", false, false}
     };
   }
 
@@ -208,8 +212,10 @@ public class TestSparkReaderDeletes extends DeleteReadTests {
 
   @Override
   public StructLikeSet rowSet(String name, Table table, String... columns) throws IOException {
+    long streamDeleteFilterThreshold = useStreamDeleteFilter ? 2 : DeleteFilter.DEFAULT_STREAM_FILTER_THRESHOLD;
     Dataset<Row> df = spark.read()
         .format("iceberg")
+        .option(SparkReadOptions.STREAM_DELETE_FILTER_THRESHOLD, streamDeleteFilterThreshold)
         .load(TableIdentifier.of("default", name).toString())
         .selectExpr(columns);
 

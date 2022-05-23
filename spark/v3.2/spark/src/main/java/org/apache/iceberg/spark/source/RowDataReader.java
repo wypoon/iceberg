@@ -56,14 +56,17 @@ class RowDataReader extends BaseDataReader<InternalRow> {
   private final Schema expectedSchema;
   private final String nameMapping;
   private final boolean caseSensitive;
+  private final long streamDeleteFilterThreshold;
   private final DeleteCounter counter;
 
-  RowDataReader(CombinedScanTask task, Table table, Schema expectedSchema, boolean caseSensitive) {
+  RowDataReader(CombinedScanTask task, Table table, Schema expectedSchema, boolean caseSensitive,
+      long streamDeleteFilterThreshold) {
     super(table, task);
     this.tableSchema = table.schema();
     this.expectedSchema = expectedSchema;
     this.nameMapping = table.properties().get(TableProperties.DEFAULT_NAME_MAPPING);
     this.caseSensitive = caseSensitive;
+    this.streamDeleteFilterThreshold = streamDeleteFilterThreshold;
     this.counter = DeleteCounter.instance();
   }
 
@@ -73,7 +76,8 @@ class RowDataReader extends BaseDataReader<InternalRow> {
 
   @Override
   CloseableIterator<InternalRow> open(FileScanTask task) {
-    SparkDeleteFilter deletes = new SparkDeleteFilter(task, tableSchema, expectedSchema, counter);
+    SparkDeleteFilter deletes = new SparkDeleteFilter(task, tableSchema, expectedSchema,
+        streamDeleteFilterThreshold, counter);
 
     // schema or rows returned by readers
     Schema requiredSchema = deletes.requiredSchema();
@@ -191,8 +195,10 @@ class RowDataReader extends BaseDataReader<InternalRow> {
   protected class SparkDeleteFilter extends DeleteFilter<InternalRow> {
     private final InternalRowWrapper asStructLike;
 
-    SparkDeleteFilter(FileScanTask task, Schema tableSchema, Schema requestedSchema, DeleteCounter counter) {
-      super(task.file().path().toString(), task.deletes(), tableSchema, requestedSchema, counter);
+    SparkDeleteFilter(FileScanTask task, Schema tableSchema, Schema requestedSchema,
+        long streamFilterThreshold, DeleteCounter counter) {
+      super(task.file().path().toString(), task.deletes(), tableSchema, requestedSchema,
+          streamFilterThreshold, counter);
       this.asStructLike = new InternalRowWrapper(SparkSchemaUtil.convert(requiredSchema()));
     }
 

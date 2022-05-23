@@ -32,6 +32,7 @@ import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.Schema;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.TableProperties;
+import org.apache.iceberg.data.DeleteFilter;
 import org.apache.iceberg.io.OutputFileFactory;
 import org.apache.iceberg.io.TaskWriter;
 import org.apache.iceberg.io.UnpartitionedWriter;
@@ -83,7 +84,8 @@ public class RowDataRewriter implements Serializable {
     Schema schema = table.schema();
     Map<String, String> properties = table.properties();
 
-    RowDataReader dataReader = new RowDataReader(task, table, schema, caseSensitive);
+    RowDataReader dataReader = new RowDataReader(task, table, schema, caseSensitive,
+        DeleteFilter.DEFAULT_STREAM_FILTER_THRESHOLD);
 
     StructType structType = SparkSchemaUtil.convert(schema);
     SparkAppenderFactory appenderFactory = SparkAppenderFactory.builderFor(table, schema, structType)
