@@ -65,7 +65,7 @@ class BatchDataReader extends BaseDataReader<ColumnarBatch> {
     this.nameMapping = table.properties().get(TableProperties.DEFAULT_NAME_MAPPING);
     this.caseSensitive = caseSensitive;
     this.batchSize = size;
-    this.counter = DeleteCounter.instance();
+    this.counter = new DeleteCounter();
   }
 
   protected DeleteCounter counter() {

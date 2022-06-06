@@ -113,9 +113,9 @@ public class Deletes {
 
   public static PositionDeleteIndex toPositionIndex(CloseableIterable<Long> posDeletes, DeleteCounter counter) {
     try (CloseableIterable<Long> deletes = posDeletes) {
-      PositionDeleteIndex positionDeleteIndex = new BitmapPositionDeleteIndex();
+      BitmapPositionDeleteIndex positionDeleteIndex = new BitmapPositionDeleteIndex();
       deletes.forEach(positionDeleteIndex::delete);
-      counter.increment(((BitmapPositionDeleteIndex) positionDeleteIndex).numberOfPositionsDeleted());
+      counter.increment(positionDeleteIndex.numberOfPositionsDeleted());
       return positionDeleteIndex;
     } catch (IOException e) {
       throw new UncheckedIOException("Failed to close position delete source", e);
@@ -124,17 +124,17 @@ public class Deletes {
 
   public static <T extends StructLike> PositionDeleteIndex toPositionIndex(CharSequence dataLocation,
                                                                            List<CloseableIterable<T>> deleteFiles) {
-    return toPositionIndex(dataLocation, deleteFiles, DeleteCounter.none());
+    return toPositionIndex(dataLocation, deleteFiles, new DeleteCounter());
   }
 
   public static PositionDeleteIndex toPositionIndex(CloseableIterable<Long> posDeletes) {
-    return toPositionIndex(posDeletes, DeleteCounter.none());
+    return toPositionIndex(posDeletes, new DeleteCounter());
   }
 
   public static <T> CloseableIterable<T> streamingFilter(CloseableIterable<T> rows,
                                                          Function<T, Long> rowToPosition,
                                                          CloseableIterable<Long> posDeletes) {
-    return streamingFilter(rows, rowToPosition, posDeletes, DeleteCounter.none());
+    return streamingFilter(rows, rowToPosition, posDeletes, new DeleteCounter());
   }
 
   public static <T> CloseableIterable<T> streamingFilter(CloseableIterable<T> rows,

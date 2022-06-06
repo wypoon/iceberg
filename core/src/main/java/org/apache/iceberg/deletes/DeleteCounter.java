@@ -22,34 +22,28 @@ package org.apache.iceberg.deletes;
 /**
  * A counter to be used to count deletes as they are applied.
  */
-public interface DeleteCounter {
+public class DeleteCounter {
 
-  /**
-   * Return an instance of DeleteCounter.
-   */
-  static DeleteCounter instance() {
-    return new StandardCounter();
-  }
-
-  /**
-   * Return an instance of DeleteCounter that is not to be used.
-   */
-  static DeleteCounter none() {
-    return new NonCounter();
-  }
+  private long count = 0L;
 
   /**
    * Increment the counter by one.
    */
-  void increment();
+  public void increment() {
+    count++;
+  }
 
   /**
    * Increment the counter by delta.
    */
-  void increment(long delta);
+  public void increment(long delta) {
+    count += delta;
+  }
 
   /**
    * Return the current value of the counter.
    */
-  long get();
+  public long get() {
+    return count;
+  }
 }

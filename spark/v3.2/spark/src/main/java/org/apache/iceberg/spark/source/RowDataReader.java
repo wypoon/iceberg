@@ -64,7 +64,7 @@ class RowDataReader extends BaseDataReader<InternalRow> {
     this.expectedSchema = expectedSchema;
     this.nameMapping = table.properties().get(TableProperties.DEFAULT_NAME_MAPPING);
     this.caseSensitive = caseSensitive;
-    this.counter = DeleteCounter.instance();
+    this.counter = new DeleteCounter();
   }
 
   protected DeleteCounter counter() {
