@@ -34,13 +34,6 @@ public class DeleteCounter {
   }
 
   /**
-   * Increment the counter by delta.
-   */
-  public void increment(long delta) {
-    count += delta;
-  }
-
-  /**
    * Return the current value of the counter.
    */
   public long get() {

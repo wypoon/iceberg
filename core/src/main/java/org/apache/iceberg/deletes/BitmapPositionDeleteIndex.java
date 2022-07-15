@@ -47,8 +47,4 @@ class BitmapPositionDeleteIndex implements PositionDeleteIndex {
   public boolean isEmpty() {
     return roaring64Bitmap.isEmpty();
   }
-
-  public long numberOfPositionsDeleted() {
-    return roaring64Bitmap.getLongCardinality();
-  }
 }

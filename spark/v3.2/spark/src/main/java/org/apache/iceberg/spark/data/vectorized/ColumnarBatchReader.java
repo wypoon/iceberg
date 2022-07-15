@@ -136,7 +136,6 @@ public class ColumnarBatchReader extends BaseBatchReader<ColumnarBatch> {
 
     Pair<int[], Integer> posDelRowIdMapping(int numRowsToRead) {
       if (deletes != null && deletes.hasPosDeletes()) {
-        LOG.debug("Building row id mapping from positional deletes");
         return buildPosDelRowIdMapping(deletes.deletedRowPositions(), numRowsToRead);
       } else {
         return null;
@@ -155,6 +154,7 @@ public class ColumnarBatchReader extends BaseBatchReader<ColumnarBatch> {
      * @return the mapping array and the new num of rows in a batch, null if no row is deleted
      */
     Pair<int[], Integer> buildPosDelRowIdMapping(PositionDeleteIndex deletedRowPositions, int numRowsToRead) {
+      LOG.debug("Building row id mapping from positional deletes");
       if (deletedRowPositions == null) {
         return null;
       }
@@ -166,6 +166,8 @@ public class ColumnarBatchReader extends BaseBatchReader<ColumnarBatch> {
         if (!deletedRowPositions.isDeleted(originalRowId + rowStartPosInBatch)) {
           posDelRowIdMapping[currentRowId] = originalRowId;
           currentRowId++;
+        } else {
+          deletes.incrementDeleteCount();
         }
         originalRowId++;
       }
@@ -198,9 +200,24 @@ public class ColumnarBatchReader extends BaseBatchReader<ColumnarBatch> {
      * [0,4,5,7,-,-,-,-] -- After applying equality deletes [Set Num records to 4]
      */
     void applyEqDelete() {
-      Iterator<InternalRow> it = columnarBatch.rowIterator();
       LOG.debug("Applying equality deletes to row id mapping");
-      int currentRowId = deletes.applyEqDeletes(it, rowIdMapping);
+      Iterator<InternalRow> it = columnarBatch.rowIterator();
+      int rowId = 0;
+      int currentRowId = 0;
+      while (it.hasNext()) {
+        InternalRow row = it.next();
+        if (deletes.eqDeletedRowFilter().test(row)) {
+          // the row is NOT deleted
+          // skip deleted rows by pointing to the next undeleted row Id
+          rowIdMapping[currentRowId] = rowIdMapping[rowId];
+          currentRowId++;
+        } else {
+          deletes.incrementDeleteCount();
+        }
+
+        rowId++;
+      }
+
       columnarBatch.setNumRows(currentRowId);
     }
   }

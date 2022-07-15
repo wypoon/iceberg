@@ -103,32 +103,21 @@ public class Deletes {
   }
 
   public static <T extends StructLike> PositionDeleteIndex toPositionIndex(CharSequence dataLocation,
-                                                                           List<CloseableIterable<T>> deleteFiles,
-                                                                           DeleteCounter counter) {
+                                                                           List<CloseableIterable<T>> deleteFiles) {
     DataFileFilter<T> locationFilter = new DataFileFilter<>(dataLocation);
     List<CloseableIterable<Long>> positions = Lists.transform(deleteFiles, deletes ->
         CloseableIterable.transform(locationFilter.filter(deletes), row -> (Long) POSITION_ACCESSOR.get(row)));
-    return toPositionIndex(CloseableIterable.concat(positions), counter);
+    return toPositionIndex(CloseableIterable.concat(positions));
   }
 
-  public static PositionDeleteIndex toPositionIndex(CloseableIterable<Long> posDeletes, DeleteCounter counter) {
+  public static PositionDeleteIndex toPositionIndex(CloseableIterable<Long> posDeletes) {
     try (CloseableIterable<Long> deletes = posDeletes) {
-      BitmapPositionDeleteIndex positionDeleteIndex = new BitmapPositionDeleteIndex();
+      PositionDeleteIndex positionDeleteIndex = new BitmapPositionDeleteIndex();
       deletes.forEach(positionDeleteIndex::delete);
-      counter.increment(positionDeleteIndex.numberOfPositionsDeleted());
       return positionDeleteIndex;
     } catch (IOException e) {
       throw new UncheckedIOException("Failed to close position delete source", e);
     }
-  }
-
-  public static <T extends StructLike> PositionDeleteIndex toPositionIndex(CharSequence dataLocation,
-                                                                           List<CloseableIterable<T>> deleteFiles) {
-    return toPositionIndex(dataLocation, deleteFiles, new DeleteCounter());
-  }
-
-  public static PositionDeleteIndex toPositionIndex(CloseableIterable<Long> posDeletes) {
-    return toPositionIndex(posDeletes, new DeleteCounter());
   }
 
   public static <T> CloseableIterable<T> streamingFilter(CloseableIterable<T> rows,

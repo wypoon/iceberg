@@ -20,7 +20,6 @@
 package org.apache.iceberg.data;
 
 import java.util.Collection;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -130,6 +129,10 @@ public abstract class DeleteFilter<T> {
     return !eqDeletes.isEmpty();
   }
 
+  public void incrementDeleteCount() {
+    counter.increment();
+  }
+
   Accessor<StructLike> posAccessor() {
     return posAccessor;
   }
@@ -209,29 +212,14 @@ public abstract class DeleteFilter<T> {
     throw new UnsupportedOperationException(this.getClass().getName() + " does not implement markRowDeleted");
   }
 
-  public int applyEqDeletes(Iterator<T> records, int[] mapping) {
-    Predicate<T> remainingRows = applyEqDeletes().stream()
-        .map(Predicate::negate)
-        .reduce(Predicate::and)
-        .orElse(t -> true);
-
-    int rowId = 0;
-    int currentRowId = 0;
-    while (records.hasNext()) {
-      T row = records.next();
-      if (remainingRows.test(row)) {
-        // the row is NOT deleted
-        // skip deleted rows by pointing to the next undeleted row Id
-        mapping[currentRowId] = mapping[rowId];
-        currentRowId++;
-      } else {
-        counter.increment();
-      }
-
-      rowId++;
+  public Predicate<T> eqDeletedRowFilter() {
+    if (eqDeleteRows == null) {
+      eqDeleteRows = applyEqDeletes().stream()
+          .map(Predicate::negate)
+          .reduce(Predicate::and)
+          .orElse(t -> true);
     }
-
-    return currentRowId;
+    return eqDeleteRows;
   }
 
   public PositionDeleteIndex deletedRowPositions() {
@@ -241,7 +229,7 @@ public abstract class DeleteFilter<T> {
 
     if (deleteRowPositions == null) {
       List<CloseableIterable<Record>> deletes = Lists.transform(posDeletes, this::openPosDeletes);
-      deleteRowPositions = Deletes.toPositionIndex(filePath, deletes, counter);
+      deleteRowPositions = Deletes.toPositionIndex(filePath, deletes);
     }
     return deleteRowPositions;
   }
