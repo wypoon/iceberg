@@ -212,7 +212,12 @@ abstract class SparkScan extends SparkBatch implements Scan, SupportsReportStati
     private long numSplits;
 
     RowReader(ReadTask task) {
-      super(task.task, task.table(), task.expectedSchema(), task.isCaseSensitive());
+      super(
+          task.task,
+          task.table(),
+          task.expectedSchema(),
+          task.isCaseSensitive(),
+          task.streamDeleteFilterThreshold());
       numSplits = task.task.files().size();
       LOG.debug(
           "Reading {} file split(s) for table {} using RowReader", numSplits, task.table().name());
@@ -231,7 +236,13 @@ abstract class SparkScan extends SparkBatch implements Scan, SupportsReportStati
     private long numSplits;
 
     BatchReader(ReadTask task, int batchSize) {
-      super(task.task, task.table(), task.expectedSchema(), task.isCaseSensitive(), batchSize);
+      super(
+          task.task,
+          task.table(),
+          task.expectedSchema(),
+          task.isCaseSensitive(),
+          batchSize,
+          task.streamDeleteFilterThreshold());
       numSplits = task.task.files().size();
       LOG.debug(
           "Reading {} file split(s) for table {} using BatchReader",
@@ -252,6 +263,7 @@ abstract class SparkScan extends SparkBatch implements Scan, SupportsReportStati
     private final Broadcast<Table> tableBroadcast;
     private final String expectedSchemaString;
     private final boolean caseSensitive;
+    private final long streamDeleteFilterThreshold;
 
     private transient Schema expectedSchema = null;
     private transient String[] preferredLocations = null;
@@ -261,11 +273,13 @@ abstract class SparkScan extends SparkBatch implements Scan, SupportsReportStati
         Broadcast<Table> tableBroadcast,
         String expectedSchemaString,
         boolean caseSensitive,
-        boolean localityPreferred) {
+        boolean localityPreferred,
+        long streamDeleteFilterThreshold) {
       this.task = task;
       this.tableBroadcast = tableBroadcast;
       this.expectedSchemaString = expectedSchemaString;
       this.caseSensitive = caseSensitive;
+      this.streamDeleteFilterThreshold = streamDeleteFilterThreshold;
       if (localityPreferred) {
         Table table = tableBroadcast.value();
         this.preferredLocations = Util.blockLocations(table.io(), task);
@@ -289,6 +303,10 @@ abstract class SparkScan extends SparkBatch implements Scan, SupportsReportStati
 
     public boolean isCaseSensitive() {
       return caseSensitive;
+    }
+
+    public long streamDeleteFilterThreshold() {
+      return streamDeleteFilterThreshold;
     }
 
     private Schema expectedSchema() {

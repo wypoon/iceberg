@@ -24,6 +24,7 @@ import org.apache.iceberg.DataFile;
 import org.apache.iceberg.FileScanTask;
 import org.apache.iceberg.Schema;
 import org.apache.iceberg.Table;
+import org.apache.iceberg.data.DeleteFilter;
 import org.apache.iceberg.io.CloseableIterator;
 import org.apache.spark.rdd.InputFileBlockHolder;
 import org.apache.spark.sql.catalyst.InternalRow;
@@ -37,7 +38,11 @@ public class EqualityDeleteRowReader extends RowDataReader {
   @Override
   protected CloseableIterator<InternalRow> open(FileScanTask task) {
     SparkDeleteFilter matches =
-        new SparkDeleteFilter(task.file().path().toString(), task.deletes(), counter());
+        new SparkDeleteFilter(
+            task.file().path().toString(),
+            task.deletes(),
+            DeleteFilter.DEFAULT_STREAM_FILTER_THRESHOLD,
+            counter());
 
     // schema or rows returned by readers
     Schema requiredSchema = matches.requiredSchema();
