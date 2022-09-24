@@ -56,13 +56,13 @@ public class TestDataTableScan extends ScanTestBase<TableScan, FileScanTask, Com
     List<FileScanTask> fileScanTasks = Lists.newArrayList(scan.planFiles());
     Assert.assertEquals("Must have 2 FileScanTasks", 2, fileScanTasks.size());
     for (FileScanTask task : fileScanTasks) {
-      Assert.assertEquals("Rows count must match", 10, task.estimatedRowsCount());
+      Assert.assertEquals("Rows count must match", 10, task.estimatedRowCount());
     }
 
     List<CombinedScanTask> combinedScanTasks = Lists.newArrayList(scan.planTasks());
     Assert.assertEquals("Must have 4 CombinedScanTask", 4, combinedScanTasks.size());
     for (CombinedScanTask task : combinedScanTasks) {
-      Assert.assertEquals("Rows count must match", 5, task.estimatedRowsCount());
+      Assert.assertEquals("Rows count must match", 5, task.estimatedRowCount());
     }
   }
 

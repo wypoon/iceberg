@@ -152,9 +152,9 @@ abstract class SparkScan extends SparkBatch implements Scan, SupportsReportStati
       return new Stats(SparkSchemaUtil.estimateSize(readSchema(), totalRecords), totalRecords);
     }
 
-    long rowsCount = tasks().stream().mapToLong(ScanTaskGroup::estimatedRowsCount).sum();
-    long sizeInBytes = SparkSchemaUtil.estimateSize(readSchema(), rowsCount);
-    return new Stats(sizeInBytes, rowsCount);
+    long rowCount = tasks().stream().mapToLong(ScanTaskGroup::estimatedRowCount).sum();
+    long sizeInBytes = SparkSchemaUtil.estimateSize(readSchema(), rowCount);
+    return new Stats(sizeInBytes, rowCount);
   }
 
   @Override

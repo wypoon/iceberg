@@ -36,7 +36,7 @@ public interface ScanTask extends Serializable {
    *
    * @return the estimated number of produced rows
    */
-  default long estimatedRowsCount() {
+  default long estimatedRowCount() {
     return 100_000;
   }
 
