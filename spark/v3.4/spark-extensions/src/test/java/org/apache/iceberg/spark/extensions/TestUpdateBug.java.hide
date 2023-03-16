@@ -1,0 +1,184 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+package org.apache.iceberg.spark.extensions;
+
+import java.util.Map;
+import org.apache.hadoop.hive.conf.HiveConf;
+import org.apache.iceberg.CatalogUtil;
+import org.apache.iceberg.catalog.Namespace;
+import org.apache.iceberg.exceptions.AlreadyExistsException;
+import org.apache.iceberg.hive.HiveCatalog;
+import org.apache.iceberg.hive.TestHiveMetastore;
+import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
+import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
+import org.apache.iceberg.spark.SparkCatalogConfig;
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Row;
+import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.internal.SQLConf;
+import org.junit.After;
+import org.junit.AfterClass;
+import org.junit.Assume;
+import org.junit.BeforeClass;
+import org.junit.Test;
+import org.junit.runners.Parameterized;
+
+import static org.apache.hadoop.hive.conf.HiveConf.ConfVars.METASTOREURIS;
+
+public class TestUpdateBug extends SparkExtensionsTestBase {
+
+  private final boolean vectorized;
+
+  public TestUpdateBug(String catalogName, String implementation, Map<String, String> config, boolean vectorized) {
+    super(catalogName, implementation, config);
+    this.vectorized = vectorized;
+  }
+
+  @Parameterized.Parameters(name = "catalogName = {0}, implementation = {1}, config = {2}, vectorized = {3}")
+  public static Object[][] parameters() {
+    return new Object[][] {
+        {
+            SparkCatalogConfig.SPARK.catalogName(),
+            SparkCatalogConfig.SPARK.implementation(),
+            SparkCatalogConfig.SPARK.properties(),
+            false
+        },
+        {
+            SparkCatalogConfig.SPARK.catalogName(),
+            SparkCatalogConfig.SPARK.implementation(),
+            SparkCatalogConfig.SPARK.properties(),
+            true
+        }
+    };
+  }
+
+  @BeforeClass
+  public static void startMetastoreAndSpark() {
+    metastore = new TestHiveMetastore();
+    metastore.start();
+    HiveConf hiveConf = metastore.hiveConf();
+
+    spark =
+        SparkSession.builder()
+            .master("local[2]")
+            .config("spark.appStateStore.asyncTracking.enable", false)
+            .config(SQLConf.PARTITION_OVERWRITE_MODE().key(), "dynamic")
+            .config("spark.sql.extensions", IcebergSparkSessionExtensions.class.getName())
+            .config("spark.hadoop." + METASTOREURIS.varname, hiveConf.get(METASTOREURIS.varname))
+            .enableHiveSupport()
+            .getOrCreate();
+
+    catalog =
+        (HiveCatalog)
+            CatalogUtil.loadCatalog(
+                HiveCatalog.class.getName(), "hive", ImmutableMap.of(), hiveConf);
+
+    try {
+      catalog.createNamespace(Namespace.of("default"));
+    } catch (AlreadyExistsException ignored) {
+      // the default namespace already exists. ignore the create error
+    }
+  }
+
+  @AfterClass
+  public static void stopMetastoreAndSpark() throws Exception {
+    catalog = null;
+    metastore.stop();
+    metastore = null;
+    spark.stop();
+    spark = null;
+  }
+
+  @After
+  public void dropTable() {
+    spark.sql("DROP TABLE IF EXISTS default.store_sales_iceberg");
+  }
+
+  @Test
+  public void testUpdate() {
+    Assume.assumeTrue(catalogName.equals("spark_catalog"));
+    Dataset<Row> df =
+        spark
+            .read()
+            .parquet(
+                 "file:/Users/wypoon/tmp/downloads/DEX-7782/tpcds_sf3000_withdecimal_withdate_withnulls/store_sales");
+    df.createOrReplaceTempView("store_sales");
+    String vectorizationSetting = "  'read.parquet.vectorization.enabled'='false'";
+    if (vectorized) {
+      vectorizationSetting = "  'read.parquet.vectorization.enabled'='true'";
+    }
+    spark.sql("CREATE TABLE default.store_sales_iceberg (" +
+            "  ss_sold_time_sk INT," +
+            "  ss_item_sk INT," +
+            "  ss_customer_sk INT," +
+            "  ss_cdemo_sk INT," +
+            "  ss_hdemo_sk INT," +
+            "  ss_addr_sk INT," +
+            "  ss_store_sk INT," +
+            "  ss_promo_sk INT," +
+            "  ss_ticket_number BIGINT," +
+            "  ss_quantity INT," +
+            "  ss_wholesale_cost DECIMAL(7,2)," +
+            "  ss_list_price DECIMAL(7,2)," +
+            "  ss_sales_price DECIMAL(7,2)," +
+            "  ss_ext_discount_amt DECIMAL(7,2)," +
+            "  ss_ext_sales_price DECIMAL(7,2)," +
+            "  ss_ext_wholesale_cost DECIMAL(7,2)," +
+            "  ss_ext_list_price DECIMAL(7,2)," +
+            "  ss_ext_tax DECIMAL(7,2)," +
+            "  ss_coupon_amt DECIMAL(7,2)," +
+            "  ss_net_paid DECIMAL(7,2)," +
+            "  ss_net_paid_inc_tax DECIMAL(7,2)," +
+            "  ss_net_profit DECIMAL(7,2)," +
+            "  ss_sold_date_sk INT) " +
+            "USING iceberg " +
+            "PARTITIONED BY (ss_sold_date_sk) " +
+            "TBLPROPERTIES(" +
+            "  'format-version'='2'," +
+            "  'write.delete.mode'='merge-on-read'," +
+            "  'write.update.mode'='merge-on-read'," +
+            "  'write.merge.mode'='merge-on-read'," +
+            vectorizationSetting +
+            ")");
+    assertEquals(
+        "store_sales should contain 9000462 rows",
+        ImmutableList.of(row(9000462L)),
+        sql("select count(*) from store_sales"));
+    spark.sql(
+        "insert overwrite store_sales_iceberg select * from store_sales where ss_sold_date_sk = 2452612 limit 3000000");
+    assertEquals(
+        "store_sales_iceberg should contain 3000000 rows",
+        ImmutableList.of(row(3000000L)),
+        sql("select count(*) from store_sales_iceberg"));
+    assertEquals(
+        "store_sales_iceberg should contain some rows where ss_ext_discount_amt is null",
+        ImmutableList.of(row(70546L)),
+        sql("select count(*) from store_sales_iceberg where ss_ext_discount_amt is null and ss_sold_date_sk = 2452612")
+    );
+    spark.sql(
+        "update store_sales_iceberg set ss_ext_discount_amt=0.0 " +
+        "where ss_ext_discount_amt is null and ss_sold_date_sk = 2452612");
+    assertEquals(
+        "After the update there should be no rows where ss_ext_discount_amt is null",
+        ImmutableList.of(row(0L)),
+        sql("select count(*) from store_sales_iceberg where ss_ext_discount_amt is null and ss_sold_date_sk = 2452612")
+    );
+  }
+}
