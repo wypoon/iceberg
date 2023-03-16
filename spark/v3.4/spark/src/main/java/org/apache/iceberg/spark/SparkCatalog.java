@@ -70,6 +70,7 @@ import org.apache.spark.sql.catalyst.analysis.NamespaceAlreadyExistsException;
 import org.apache.spark.sql.catalyst.analysis.NoSuchNamespaceException;
 import org.apache.spark.sql.catalyst.analysis.NoSuchTableException;
 import org.apache.spark.sql.catalyst.analysis.TableAlreadyExistsException;
+import org.apache.spark.sql.connector.catalog.CatalogV2Implicits;
 import org.apache.spark.sql.connector.catalog.Identifier;
 import org.apache.spark.sql.connector.catalog.NamespaceChange;
 import org.apache.spark.sql.connector.catalog.StagedTable;
@@ -150,7 +151,8 @@ public class SparkCatalog extends BaseCatalog {
     try {
       return load(ident);
     } catch (org.apache.iceberg.exceptions.NoSuchTableException e) {
-      throw new NoSuchTableException(ident);
+      throw new NoSuchTableException(
+          CatalogV2Implicits.IdentifierHelper(ident).asMultipartIdentifier());
     }
   }
 
@@ -228,7 +230,8 @@ public class SparkCatalog extends BaseCatalog {
               .create();
       return new SparkTable(icebergTable, !cacheEnabled);
     } catch (AlreadyExistsException e) {
-      throw new TableAlreadyExistsException(ident);
+      throw new TableAlreadyExistsException(
+          CatalogV2Implicits.IdentifierHelper(ident).asMultipartIdentifier());
     }
   }
 
@@ -247,7 +250,8 @@ public class SparkCatalog extends BaseCatalog {
               .createTransaction();
       return new StagedSparkTable(transaction);
     } catch (AlreadyExistsException e) {
-      throw new TableAlreadyExistsException(ident);
+      throw new TableAlreadyExistsException(
+          CatalogV2Implicits.IdentifierHelper(ident).asMultipartIdentifier());
     }
   }
 
@@ -266,7 +270,8 @@ public class SparkCatalog extends BaseCatalog {
               .replaceTransaction();
       return new StagedSparkTable(transaction);
     } catch (org.apache.iceberg.exceptions.NoSuchTableException e) {
-      throw new NoSuchTableException(ident);
+      throw new NoSuchTableException(
+          CatalogV2Implicits.IdentifierHelper(ident).asMultipartIdentifier());
     }
   }
 
@@ -323,7 +328,8 @@ public class SparkCatalog extends BaseCatalog {
           table, setLocation, setSnapshotId, pickSnapshotId, propertyChanges, schemaChanges);
       return new SparkTable(table, true /* refreshEagerly */);
     } catch (org.apache.iceberg.exceptions.NoSuchTableException e) {
-      throw new NoSuchTableException(ident);
+      throw new NoSuchTableException(
+          CatalogV2Implicits.IdentifierHelper(ident).asMultipartIdentifier());
     }
   }
 
@@ -376,9 +382,11 @@ public class SparkCatalog extends BaseCatalog {
       checkNotPathIdentifier(to, "renameTable");
       icebergCatalog.renameTable(buildIdentifier(from), buildIdentifier(to));
     } catch (org.apache.iceberg.exceptions.NoSuchTableException e) {
-      throw new NoSuchTableException(from);
+      throw new NoSuchTableException(
+          CatalogV2Implicits.IdentifierHelper(from).asMultipartIdentifier());
     } catch (AlreadyExistsException e) {
-      throw new TableAlreadyExistsException(to);
+      throw new TableAlreadyExistsException(
+          CatalogV2Implicits.IdentifierHelper(to).asMultipartIdentifier());
     }
   }
 

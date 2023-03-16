@@ -98,7 +98,7 @@ case class ExtendedDataSourceV2Strategy(spark: SparkSession) extends Strategy wi
       // refresh the cache using the original relation
       ReplaceDataExec(planLater(query), refreshCache(r), write) :: Nil
 
-    case WriteDelta(_: DataSourceV2Relation, query, r: DataSourceV2Relation, projs, Some(write)) =>
+    case WriteDelta(_: DataSourceV2Relation, _, query, r: DataSourceV2Relation, projs, Some(write)) =>
       // refresh the cache using the original relation
       WriteDeltaExec(planLater(query), refreshCache(r), projs, write) :: Nil
 
@@ -110,7 +110,7 @@ case class ExtendedDataSourceV2Strategy(spark: SparkSession) extends Strategy wi
         notMatchedOutputs, targetOutput, rowIdAttrs, performCardinalityCheck, emitNotMatchedTargetRows,
         output, planLater(child)) :: Nil
 
-    case DeleteFromIcebergTable(DataSourceV2ScanRelation(r, _, output, _), condition, None) =>
+    case DeleteFromIcebergTable(DataSourceV2ScanRelation(r, _, output, _, _), condition, None) =>
       // the optimizer has already checked that this delete can be handled using a metadata operation
       val deleteCond = condition.getOrElse(Literal.TrueLiteral)
       val predicates = splitConjunctivePredicates(deleteCond)
@@ -121,7 +121,7 @@ case class ExtendedDataSourceV2Strategy(spark: SparkSession) extends Strategy wi
           throw QueryCompilationErrors.cannotTranslateExpressionToSourceFilterError(pred)
         }
         filter
-      }.toArray
+      }.toArray.map { _.toV2 }
       DeleteFromTableExec(r.table.asDeletable, filters, refreshCache(r)) :: Nil
 
     case NoStatsUnaryNode(child) =>

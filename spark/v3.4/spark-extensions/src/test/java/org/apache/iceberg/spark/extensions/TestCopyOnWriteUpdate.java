@@ -69,6 +69,11 @@ public class TestCopyOnWriteUpdate extends TestUpdate {
   }
 
   @Test
+  public synchronized void testUpdateWithSerializableIsolation() throws InterruptedException {
+    testUpdateWithSerializableIsolation_();
+  }
+
+  @Test
   public synchronized void testUpdateWithConcurrentTableRefresh() throws Exception {
     // this test can only be run with Hive tables as it requires a reliable lock
     // also, the table cache must be enabled so that the same table instance can be reused

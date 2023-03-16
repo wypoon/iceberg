@@ -141,13 +141,13 @@ class IcebergSparkSqlExtensionsParser(delegate: ParserInterface) extends ParserI
   }
 
   private def replaceRowLevelCommands(plan: LogicalPlan): LogicalPlan = plan resolveOperatorsDown {
-    case DeleteFromTable(UnresolvedIcebergTable(aliasedTable), condition) =>
-      DeleteFromIcebergTable(aliasedTable, Some(condition))
+    // case DeleteFromTable(UnresolvedIcebergTable(aliasedTable), condition) =>
+    //   DeleteFromIcebergTable(aliasedTable, Some(condition))
 
     case UpdateTable(UnresolvedIcebergTable(aliasedTable), assignments, condition) =>
       UpdateIcebergTable(aliasedTable, assignments, condition)
 
-    case MergeIntoTable(UnresolvedIcebergTable(aliasedTable), source, cond, matchedActions, notMatchedActions) =>
+    case MergeIntoTable(UnresolvedIcebergTable(aliasedTable), source, cond, matchedActions, notMatchedActions, _) =>
       // cannot construct MergeIntoIcebergTable right away as MERGE operations require special resolution
       // that's why the condition and actions must be hidden from the regular resolution rules in Spark
       // see ResolveMergeIntoTableReferences for details

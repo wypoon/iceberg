@@ -19,6 +19,7 @@
 
 package org.apache.spark.sql.execution.datasources.v2
 
+import java.util.Optional
 import java.util.UUID
 import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.catalyst.expressions.PredicateHelper
@@ -32,8 +33,8 @@ import org.apache.spark.sql.catalyst.plans.logical.WriteDelta
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.catalyst.utils.PlanUtils.isIcebergRelation
 import org.apache.spark.sql.connector.catalog.Table
-import org.apache.spark.sql.connector.iceberg.write.DeltaWriteBuilder
-import org.apache.spark.sql.connector.write.ExtendedLogicalWriteInfoImpl
+import org.apache.spark.sql.connector.write.DeltaWriteBuilder
+import org.apache.spark.sql.connector.write.LogicalWriteInfoImpl
 import org.apache.spark.sql.connector.write.SupportsDynamicOverwrite
 import org.apache.spark.sql.connector.write.SupportsOverwrite
 import org.apache.spark.sql.connector.write.SupportsTruncate
@@ -53,13 +54,13 @@ object ExtendedV2Writes extends Rule[LogicalPlan] with PredicateHelper {
   import DataSourceV2Implicits._
 
   override def apply(plan: LogicalPlan): LogicalPlan = plan transformDown {
-    case a @ AppendData(r: DataSourceV2Relation, query, options, _, None) if isIcebergRelation(r) =>
+    case a @ AppendData(r: DataSourceV2Relation, query, options, _, None, _) if isIcebergRelation(r) =>
       val writeBuilder = newWriteBuilder(r.table, query.schema, options)
       val write = writeBuilder.build()
       val newQuery = ExtendedDistributionAndOrderingUtils.prepareQuery(write, query, conf)
       a.copy(write = Some(write), query = newQuery)
 
-    case o @ OverwriteByExpression(r: DataSourceV2Relation, deleteExpr, query, options, _, None)
+    case o @ OverwriteByExpression(r: DataSourceV2Relation, deleteExpr, query, options, _, None, _)
         if isIcebergRelation(r) =>
       // fail if any filter cannot be converted. correctness depends on removing all matching data.
       val filters = splitConjunctivePredicates(deleteExpr).flatMap { pred =>
@@ -104,7 +105,7 @@ object ExtendedV2Writes extends Rule[LogicalPlan] with PredicateHelper {
       val newQuery = ExtendedDistributionAndOrderingUtils.prepareQuery(write, query, conf)
       rd.copy(write = Some(write), query = Project(rd.dataInput, newQuery))
 
-    case wd @ WriteDelta(r: DataSourceV2Relation, query, _, projections, None) =>
+    case wd @ WriteDelta(r: DataSourceV2Relation, _, query, _, projections, None) =>
       val rowSchema = projections.rowProjection.map(_.schema).orNull
       val rowIdSchema = projections.rowIdProjection.schema
       val metadataSchema = projections.metadataProjection.map(_.schema).orNull
@@ -129,12 +130,12 @@ object ExtendedV2Writes extends Rule[LogicalPlan] with PredicateHelper {
       writeOptions: Map[String, String],
       rowIdSchema: StructType = null,
       metadataSchema: StructType = null): WriteBuilder = {
-    val info = ExtendedLogicalWriteInfoImpl(
+    val info = LogicalWriteInfoImpl(
       queryId = UUID.randomUUID().toString,
       rowSchema,
       writeOptions.asOptions,
-      rowIdSchema,
-      metadataSchema)
+      Optional.ofNullable(rowIdSchema),
+      Optional.ofNullable(metadataSchema))
     table.asWritable.newWriteBuilder(info)
   }
 }

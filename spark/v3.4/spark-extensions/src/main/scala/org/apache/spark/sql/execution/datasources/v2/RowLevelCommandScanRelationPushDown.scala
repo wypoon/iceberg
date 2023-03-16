@@ -173,7 +173,7 @@ object UnplannedGroupBasedMergeOperation {
         case rd @ ReplaceIcebergData(DataSourceV2Relation(table, _, _, _, _), query, _, _) =>
           val joinsAndRelations = query.collect {
             case j @ Join(
-                NoStatsUnaryNode(ScanOperation(_, filters, r: DataSourceV2Relation)), _, _, _, _)
+                NoStatsUnaryNode(ScanOperation(_, _, filters, r: DataSourceV2Relation)), _, _, _, _)
                 if filters.isEmpty && r.table.eq(table) =>
               j -> r
           }

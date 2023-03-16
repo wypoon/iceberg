@@ -72,6 +72,11 @@ public class TestCopyOnWriteDelete extends TestDelete {
   }
 
   @Test
+  public synchronized void testDeleteWithSerializableIsolation() throws InterruptedException {
+    testDeleteWithSerializableIsolation_();
+  }
+
+  @Test
   public synchronized void testDeleteWithConcurrentTableRefresh() throws Exception {
     // this test can only be run with Hive tables as it requires a reliable lock
     // also, the table cache must be enabled so that the same table instance can be reused

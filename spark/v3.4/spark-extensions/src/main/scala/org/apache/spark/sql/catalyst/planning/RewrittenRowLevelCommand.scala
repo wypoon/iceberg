@@ -60,7 +60,7 @@ object RewrittenRowLevelCommand {
         case rd @ ReplaceIcebergData(DataSourceV2Relation(table, _, _, _, _), query, _, _) =>
           val readRelation = findReadRelation(table, query, allowScanDuplication)
           readRelation.map((c, _, rd))
-        case wd @ WriteDelta(DataSourceV2Relation(table, _, _, _, _), query, _, _, _) =>
+        case wd @ WriteDelta(DataSourceV2Relation(table, _, _, _, _), _, query, _, _, _) =>
           val readRelation = findReadRelation(table, query, allowScanDuplication)
           readRelation.map((c, _, wd))
         case _ =>

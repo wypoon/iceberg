@@ -35,6 +35,7 @@ import org.apache.iceberg.util.Pair;
 import org.apache.iceberg.util.SnapshotUtil;
 import org.apache.spark.sql.catalyst.analysis.NoSuchTableException;
 import org.apache.spark.sql.catalyst.analysis.TableAlreadyExistsException;
+import org.apache.spark.sql.connector.catalog.CatalogV2Implicits;
 import org.apache.spark.sql.connector.catalog.Identifier;
 import org.apache.spark.sql.connector.catalog.TableCatalog;
 import org.apache.spark.sql.connector.catalog.TableChange;
@@ -176,7 +177,8 @@ public class SparkCachedTableCatalog implements TableCatalog {
     Table table = TABLE_CACHE.get(key);
 
     if (table == null) {
-      throw new NoSuchTableException(ident);
+      throw new NoSuchTableException(
+          CatalogV2Implicits.IdentifierHelper(ident).asMultipartIdentifier());
     }
 
     if (snapshotId != null) {

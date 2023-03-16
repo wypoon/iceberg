@@ -166,7 +166,7 @@ public class TestRequiredDistributionAndOrdering extends SparkCatalogTestBase {
     AssertHelpers.assertThrows(
         "Should reject writes without ordering",
         SparkException.class,
-        "Writing job aborted",
+        "Job aborted",
         () -> {
           try {
             inputDF
@@ -236,7 +236,7 @@ public class TestRequiredDistributionAndOrdering extends SparkCatalogTestBase {
     AssertHelpers.assertThrows(
         "Should reject writes without ordering",
         SparkException.class,
-        "Writing job aborted",
+        "Job aborted",
         () -> {
           try {
             inputDF.writeTo(tableName).append();

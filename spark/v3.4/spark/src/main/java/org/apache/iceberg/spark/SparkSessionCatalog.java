@@ -33,6 +33,7 @@ import org.apache.spark.sql.catalyst.analysis.NonEmptyNamespaceException;
 import org.apache.spark.sql.catalyst.analysis.TableAlreadyExistsException;
 import org.apache.spark.sql.connector.catalog.CatalogExtension;
 import org.apache.spark.sql.connector.catalog.CatalogPlugin;
+import org.apache.spark.sql.connector.catalog.CatalogV2Implicits;
 import org.apache.spark.sql.connector.catalog.Identifier;
 import org.apache.spark.sql.connector.catalog.NamespaceChange;
 import org.apache.spark.sql.connector.catalog.StagedTable;
@@ -214,7 +215,8 @@ public class SparkSessionCatalog<T extends TableCatalog & SupportsNamespaces> ex
 
     // attempt to drop the table and fail if it doesn't exist
     if (!catalog.dropTable(ident)) {
-      throw new NoSuchTableException(ident);
+      throw new NoSuchTableException(
+          CatalogV2Implicits.IdentifierHelper(ident).asMultipartIdentifier());
     }
 
     try {

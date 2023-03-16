@@ -61,9 +61,9 @@ import org.apache.spark.sql.catalyst.util.WriteDeltaProjections
 import org.apache.spark.sql.connector.catalog.SupportsRowLevelOperations
 import org.apache.spark.sql.connector.expressions.FieldReference
 import org.apache.spark.sql.connector.expressions.NamedReference
-import org.apache.spark.sql.connector.iceberg.write.SupportsDelta
 import org.apache.spark.sql.connector.write.RowLevelOperation.Command.MERGE
 import org.apache.spark.sql.connector.write.RowLevelOperationTable
+import org.apache.spark.sql.connector.write.SupportsDelta
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.types.IntegerType
 import org.apache.spark.sql.types.StructField
@@ -248,7 +248,10 @@ object RewriteMergeIntoTable extends RewriteRowLevelIcebergCommand with Predicat
 
     // resolve all needed attrs (e.g. row ID and any required metadata attrs)
     val rowAttrs = relation.output
-    val rowIdAttrs = resolveRowIdAttrs(relation, operationTable.operation)
+    val rowIdAttrs = resolveRowIdAttrs(
+        relation,
+        // buildWriteDeltaPlan is called only in case operationTable.operation is SupportsDelta
+        operationTable.operation.asInstanceOf[SupportsDelta])
     val metadataAttrs = resolveRequiredMetadataAttrs(relation, operationTable.operation)
 
     // construct a scan relation and include all required metadata columns
@@ -306,7 +309,7 @@ object RewriteMergeIntoTable extends RewriteRowLevelIcebergCommand with Predicat
     // build a plan to write the row delta to the table
     val writeRelation = relation.copy(table = operationTable)
     val projections = buildMergeDeltaProjections(mergeRows, rowAttrs, rowIdAttrs, metadataAttrs)
-    WriteDelta(writeRelation, mergeRows, relation, projections)
+    WriteDelta(writeRelation, cond, mergeRows, relation, projections)
   }
 
   private def actionCondition(action: MergeAction): Expression = {

@@ -33,10 +33,10 @@ import org.apache.iceberg.types.Types.NestedField;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.connector.distributions.Distribution;
 import org.apache.spark.sql.connector.expressions.SortOrder;
-import org.apache.spark.sql.connector.iceberg.write.DeltaWrite;
-import org.apache.spark.sql.connector.iceberg.write.DeltaWriteBuilder;
-import org.apache.spark.sql.connector.iceberg.write.ExtendedLogicalWriteInfo;
 import org.apache.spark.sql.connector.read.Scan;
+import org.apache.spark.sql.connector.write.DeltaWrite;
+import org.apache.spark.sql.connector.write.DeltaWriteBuilder;
+import org.apache.spark.sql.connector.write.LogicalWriteInfo;
 import org.apache.spark.sql.connector.write.RowLevelOperation.Command;
 import org.apache.spark.sql.types.StructType;
 
@@ -51,7 +51,7 @@ class SparkPositionDeltaWriteBuilder implements DeltaWriteBuilder {
   private final SparkBatchQueryScan scan;
   private final IsolationLevel isolationLevel;
   private final SparkWriteConf writeConf;
-  private final ExtendedLogicalWriteInfo info;
+  private final LogicalWriteInfo info;
   private final boolean handleTimestampWithoutZone;
   private final boolean checkNullability;
   private final boolean checkOrdering;
@@ -63,7 +63,7 @@ class SparkPositionDeltaWriteBuilder implements DeltaWriteBuilder {
       Command command,
       Scan scan,
       IsolationLevel isolationLevel,
-      ExtendedLogicalWriteInfo info) {
+      LogicalWriteInfo info) {
     this.spark = spark;
     this.table = table;
     this.command = command;
@@ -87,14 +87,15 @@ class SparkPositionDeltaWriteBuilder implements DeltaWriteBuilder {
       TypeUtil.validateWriteSchema(table.schema(), dataSchema, checkNullability, checkOrdering);
     }
 
-    Schema rowIdSchema = SparkSchemaUtil.convert(EXPECTED_ROW_ID_SCHEMA, info.rowIdSchema());
+    Schema rowIdSchema = SparkSchemaUtil.convert(EXPECTED_ROW_ID_SCHEMA, info.rowIdSchema().get());
     TypeUtil.validateSchema(
         "row ID", EXPECTED_ROW_ID_SCHEMA, rowIdSchema, checkNullability, checkOrdering);
 
     NestedField partition =
         MetadataColumns.metadataColumn(table, MetadataColumns.PARTITION_COLUMN_NAME);
     Schema expectedMetadataSchema = new Schema(MetadataColumns.SPEC_ID, partition);
-    Schema metadataSchema = SparkSchemaUtil.convert(expectedMetadataSchema, info.metadataSchema());
+    Schema metadataSchema =
+        SparkSchemaUtil.convert(expectedMetadataSchema, info.metadataSchema().get());
     TypeUtil.validateSchema(
         "metadata", expectedMetadataSchema, metadataSchema, checkNullability, checkOrdering);
 

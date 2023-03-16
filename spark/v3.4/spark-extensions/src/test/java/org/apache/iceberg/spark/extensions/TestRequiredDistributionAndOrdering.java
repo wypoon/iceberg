@@ -190,7 +190,7 @@ public class TestRequiredDistributionAndOrdering extends SparkExtensionsTestBase
     AssertHelpers.assertThrows(
         "Should reject writes without ordering",
         SparkException.class,
-        "Writing job aborted",
+        "Job aborted",
         () -> {
           try {
             inputDF

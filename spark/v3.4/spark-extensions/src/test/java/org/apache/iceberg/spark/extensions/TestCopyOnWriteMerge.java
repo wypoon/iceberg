@@ -70,6 +70,11 @@ public class TestCopyOnWriteMerge extends TestMerge {
   }
 
   @Test
+  public synchronized void testMergeWithSerializableIsolation() throws InterruptedException {
+    testMergeWithSerializableIsolation_();
+  }
+
+  @Test
   public synchronized void testMergeWithConcurrentTableRefresh() throws Exception {
     // this test can only be run with Hive tables as it requires a reliable lock
     // also, the table cache must be enabled so that the same table instance can be reused

@@ -22,7 +22,6 @@ package org.apache.spark.sql.catalyst.analysis
 import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.catalyst.SQLConfHelper
 import org.apache.spark.sql.catalyst.expressions.Alias
-import org.apache.spark.sql.catalyst.expressions.AnsiCast
 import org.apache.spark.sql.catalyst.expressions.AssignmentUtils._
 import org.apache.spark.sql.catalyst.expressions.Cast
 import org.apache.spark.sql.catalyst.expressions.CreateNamedStruct
@@ -194,7 +193,10 @@ trait AssignmentAlignmentSupport extends CastSupport {
       case _ if tableAttr.dataType.sameType(expr.dataType) =>
         expr
       case StoreAssignmentPolicy.ANSI =>
-        AnsiCast(expr, tableAttr.dataType, Option(conf.sessionLocalTimeZone))
+        val cast = Cast(expr, tableAttr.dataType, Option(conf.sessionLocalTimeZone),
+          ansiEnabled = true)
+        cast.setTagValue(Cast.BY_TABLE_INSERTION, ())
+        cast
       case _ =>
         Cast(expr, tableAttr.dataType, Option(conf.sessionLocalTimeZone))
     }
