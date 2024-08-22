@@ -38,6 +38,7 @@ import org.apache.iceberg.io.CloseableIterator;
 import org.apache.iceberg.io.InputFile;
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
 import org.apache.iceberg.spark.SparkSchemaUtil;
+import org.apache.iceberg.types.TypeUtil;
 import org.apache.iceberg.types.Types.NestedField;
 import org.apache.iceberg.util.SnapshotUtil;
 import org.apache.spark.rdd.InputFileBlockHolder;
@@ -183,11 +184,18 @@ class ChangelogRowReader extends BaseRowReader<ChangelogScanTask>
 
   private CloseableIterable<InternalRow> openDeletedRowsScanTask(DeletedRowsScanTask task) {
     String filePath = task.file().path().toString();
-    SparkDeleteFilter deletes = new SparkDeleteFilter(filePath, task.addedDeletes(), counter());
-    int[] indexes = indexesInRow(deletes.requiredSchema());
+    SparkDeleteFilter existingDeletes =
+        new SparkDeleteFilter(filePath, task.existingDeletes(), counter());
+    SparkDeleteFilter newDeletes = new SparkDeleteFilter(filePath, task.addedDeletes(), counter());
+    Schema schema1 = existingDeletes.requiredSchema();
+    Schema schema2 = newDeletes.requiredSchema();
+    Schema requiredSchema = TypeUtil.join(schema1, schema2);
+    int[] indexes = indexesInRow(requiredSchema);
 
     return CloseableIterable.transform(
-        deletes.filterDeleted(rows(task, deletes.requiredSchema())),
+        // first, apply the existing deletes and get the rows remaining
+        // then, see what rows are deleted by applying the new deletes
+        newDeletes.filterDeleted(existingDeletes.filter(rows(task, requiredSchema))),
         row -> {
           InternalRow expectedRow = new GenericInternalRow(columns.length);
 
