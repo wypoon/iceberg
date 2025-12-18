@@ -40,7 +40,7 @@ class IcebergSparkSessionExtensions extends (SparkSessionExtensions => Unit) {
     extensions.injectResolutionRule { spark => ResolveProcedures(spark) }
     extensions.injectResolutionRule { spark => ResolveViews(spark) }
     extensions.injectResolutionRule { _ => ProcedureArgumentCoercion }
-    extensions.injectCheckRule(_ => CheckViews)
+    extensions.injectCheckRule { _ => CheckViews }
     extensions.injectResolutionRule { _ => RewriteUpdateTableForRowLineage }
     extensions.injectResolutionRule { _ => RewriteMergeIntoTableForRowLineage }
 
